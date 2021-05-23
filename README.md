@@ -7,9 +7,8 @@ Hybrid CPU/GPU DBSCAN algorithm. Homework of multicore course, SYSU.
 
 选题报告
 
-- 请大家填充自己的学号姓名
-- 目前简单写了一点大纲
 - 预期 05/23(Sun) 完成选题报告
+- 已完成初稿，请大家看下有无问题，未提交
 
 
 
