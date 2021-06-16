@@ -14,7 +14,8 @@ cmake ..
 make
 ```
 
-
+- Change .vscode/c_cpp_properties.json to highlight properly in ur environment.
+- Implement cuda functions in lib/xxx.cu and declare them in include/xxx.cuh.
 
 
 ### Schedule
