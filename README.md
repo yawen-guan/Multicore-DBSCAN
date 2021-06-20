@@ -5,8 +5,17 @@ Hybrid CPU/GPU DBSCAN algorithm. Homework of multicore course, SYSU.
 
 ### Working on...
 
+added a simple code framework
 
+```bash
+cd Code
+mkdir build && cd build
+cmake ..
+make
+```
 
+- Change .vscode/c_cpp_properties.json to highlight properly in ur environment.
+- Implement cuda functions in lib/xxx.cu and declare them in include/xxx.cuh.
 
 
 ### Schedule
