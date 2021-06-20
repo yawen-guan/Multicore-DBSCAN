@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 
+#include "DBSCAN.hpp"
 #include "global.hpp"
 #include "utils.hpp"
 
@@ -60,6 +61,11 @@ void BPS_DBSCAN(
         } else {
             /***** HYBRID-DBSCAN *****/
         }
+
+#pragma omp critical
+        {
+            clusterIDsArray[partID] = partClusterIDs;
+        }
     }
 
     double endTime_DBSCAN = omp_get_wtime();
@@ -71,7 +77,7 @@ int main(int argc, char *argv[]) {
     /***** handle input *****/
 
     if (argc < 5) {
-        fprintf(stderr, "Usage: <Dataset file>, <Epsilon>, <Minpts>, <Partitions>");
+        fprintf(stderr, "Usage: multicoreDBSCAN <Dataset file>, <Epsilon>, <Minpts>, <Partitions>");
         exit(0);
     }
 
@@ -90,6 +96,12 @@ int main(int argc, char *argv[]) {
 
     printf("\n----------- import dataset -----------\n");
     printf("dataSize = %u\n", dataSize);
+
+    /***** original DBSCAN *****/
+
+    auto dbscan = DBSCAN(epsilon, minpts, dataPoints, dataSize);
+    dbscan.run();
+    dbscan.print("../data/output/DBSCAN-data-2500-out.csv");
 
     /***** initial clusters *****/
 

@@ -1,7 +1,36 @@
 #include "utils.hpp"
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
+using std::cout;
+using std::endl;
+using std::getline;
+using std::ifstream;
+using std::stringstream;
+
 DataPointsType importDataset(const string datafile) {
-    return array<vector<float>, 2>();
+    DataPointsType dataPoints;
+    ifstream in(datafile);
+    string str;
+    uint idx = 0;
+    float x;
+
+    if (in.is_open()) {
+        while (getline(in, str, ',')) {
+            stringstream ss(str);
+            while (ss >> x) {
+                dataPoints[idx].push_back(x);
+                idx = 1 - idx;
+            }
+            // ;
+            // cout << "str = " << str << " x = " << x << endl;
+        }
+        in.close();
+    }
+
+    return dataPoints;
 }
 
 void generateGridDimensions(

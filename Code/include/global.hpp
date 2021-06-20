@@ -3,6 +3,7 @@
 #include <array>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 using std::array;
@@ -12,6 +13,7 @@ using std::size_t;
 using std::string;
 using std::tie;
 using std::tuple;
+using std::unordered_set;
 using std::vector;
 
 #define NUM_THREADS 6
@@ -39,4 +41,18 @@ struct GridCellLookup {
     bool operator<(const GridCellLookup& other) const {
         return gridCellLinearID < other.gridCellLinearID;
     }
+};
+
+struct NeighborTable {
+    uint pointID;
+    vector<uint> neighbors;
+};
+
+//need to pass in the neighbortable thats an array of the dataset size.
+//carry around a pointer to the array that has the points within epsilon though
+struct NeighborTableLookup {
+    uint pointID;
+    uint indexMin;
+    uint indexMax;
+    int* dataPtr;
 };
