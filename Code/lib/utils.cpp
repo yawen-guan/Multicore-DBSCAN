@@ -44,7 +44,10 @@ void generateGridDimensions(
     MinMaxValsType &maxVals,
     array<uint, 2> &nCells,
     uint64 &totalCells) {
-
+        if(dataPoints[0].size() == 0){
+            printf("Empty dataPoints !\n");
+            return;
+        }
         // the minimum/maximum value of the points in each dimensions +/- epsilon
         // add buffer around each dim so no weirdness later with putting data into cells
         for (int j=0; j<2; j++){
@@ -244,7 +247,9 @@ void generatePartitionDatasets(
         
 
         //resize
+        partDataPointsArray.resize(CHUNKS);
         for (unsigned int i=0; i<CHUNKS; i++){
+            
             for (int j=0; j<2; j++){
             partDataPointsArray[i][j].resize(pointIDsPartition[i].size());
             }
