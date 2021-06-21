@@ -39,6 +39,7 @@ void generatePartitions(
  */
 void generatePartitionDatasets(
     const DataPointsType &dataPoints,
+    const float &epsilon,
     const MinMaxValsType &minVals,
     const MinMaxValsType &maxVals,
     const vector<uint> &binBounaries,
@@ -46,4 +47,4 @@ void generatePartitionDatasets(
     vector<DataPointsType> &partDataPointsArray,
     vector<PointChunkLookup> &pointChunkMapping,
     vector<uint> &pointIDs_shadow,
-    DataPointsType dataPoints_shadow);
+    DataPointsType &dataPoints_shadow);
