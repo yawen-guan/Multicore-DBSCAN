@@ -64,3 +64,13 @@ void generatePartitionDatasets(
     vector<uint> &pointIDs_shadow,
     DataPointsType dataPoints_shadow) {
 }
+
+void check(const uint dataSize, const vector<int> &clusterIDs0, const vector<int> &clusterIDs1) {
+    for (int i = 0; i < dataSize; i++) {
+        if (clusterIDs0[i] != clusterIDs1[i]) {
+            fprintf(stderr, "Error: Wrong Answer.\n");
+            return;
+        }
+    }
+    printf("Check Passed.\n");
+}

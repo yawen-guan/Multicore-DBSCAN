@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 project(libcudaDBSCAN LANGUAGES CXX CUDA)
 
-add_library(libcudaDBSCAN SHARED utils.cpp DBSCAN.cpp)
+add_library(libcudaDBSCAN SHARED utils.cpp DBSCAN.cpp HybridDBSCAN.cu)
 
 # Request that particles be built with -std=c++11 As this is a public compile
 # feature anything that links to particles will also build with -std=c++11

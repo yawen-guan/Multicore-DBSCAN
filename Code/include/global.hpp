@@ -1,18 +1,24 @@
 #pragma once
 
+#include <omp.h>
+
 #include <array>
+#include <cmath>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 using std::array;
 using std::get;
 using std::make_tuple;
+using std::pow;
 using std::size_t;
 using std::string;
 using std::tie;
 using std::tuple;
+using std::unordered_map;
 using std::unordered_set;
 using std::vector;
 
@@ -28,11 +34,6 @@ struct PointChunkLookup {
     uint pointID;
     uint chunkID;
     uint idxInChunk;
-};
-
-struct Grid {
-    uint indexMin;
-    uint indexMax;
 };
 
 struct GridCellLookup {
