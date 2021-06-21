@@ -68,6 +68,8 @@ void BPS_DBSCAN(
         }
     }
 
+    
+
     double endTime_DBSCAN = omp_get_wtime();
     printf("\n----------- BPS-HDBSCAN -----------\n");
     printf("Time total to BPS-HDBSCAN: %f\n", endTime_DBSCAN - startTime_DBSCAN);
