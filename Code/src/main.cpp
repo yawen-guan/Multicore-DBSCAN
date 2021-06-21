@@ -32,7 +32,7 @@ void BPS_DBSCAN(
 
         DataPointsType partDataPoints = partDataPointsArray[partID];
         uint64 partDataSize = partDataPoints[0].size();
-        printf("Data points in partition #%d: %lu", partID, partDataSize);
+        printf("Data points in partition #%d: %lu\n", partID, partDataSize);
 
         vector<uint> partClusterIDs;  // local cluster IDs
 
@@ -40,7 +40,7 @@ void BPS_DBSCAN(
         array<uint, 2> nCells;
         uint64 nNonEmptyCells = 0, totalCells = 0, totalNeighbors = 0;
         generateGridDimensions(partDataPoints, epsilon, minVals, maxVals, nCells, totalCells);
-        printf("Grid: total cells (including empty) %lu", totalCells);
+        printf("Grid: total cells (including empty) %lu\n", totalCells);
 
         /**************** not finish *************/
 
@@ -53,7 +53,7 @@ void BPS_DBSCAN(
         if (meanPointsHeuristic < ((1.0 * minpts) * 0.25)) {
             enableDenseBox = false;
         }
-        printf("Dynamic densebox: Partition: %d, Heuristic value: %f, DENSEBOX: %d", partID, meanPointsHeuristic, enableDenseBox);
+        printf("Dynamic densebox: Partition: %d, Heuristic value: %f, DENSEBOX: %d\n", partID, meanPointsHeuristic, enableDenseBox);
 
         vector<uint> queryPointIDs;  // Point ids that need to be searched on the GPU (weren't found by dense box)
 
@@ -68,6 +68,8 @@ void BPS_DBSCAN(
             clusterIDsArray[partID] = partClusterIDs;
         }
     }
+
+    
 
     double endTime_DBSCAN = omp_get_wtime();
     printf("\n----------- BPS-HDBSCAN -----------\n");
@@ -158,6 +160,7 @@ int main(int argc, char *argv[]) {
 
     generatePartitionDatasets(
         dataPoints,
+        epsilon,
         minVals,
         maxVals,
         binBounaries,

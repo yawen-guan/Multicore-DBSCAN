@@ -39,6 +39,7 @@ void generatePartitions(
  */
 void generatePartitionDatasets(
     const DataPointsType &dataPoints,
+    const float &epsilon,
     const MinMaxValsType &minVals,
     const MinMaxValsType &maxVals,
     const vector<uint> &binBounaries,
