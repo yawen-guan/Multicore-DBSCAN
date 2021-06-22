@@ -1,23 +1,8 @@
 #pragma once
 
-#include "global.hpp"
+#include "DBSCAN.hpp"
 
-struct Grid {
-    uint orderedID_min;
-    uint orderedID_max;
-};
-
-struct NeighborTable {
-    uint valueIdx_min;
-    uint valueIdx_max;
-};
-
-struct KeyData {
-    uint key, pos;
-    KeyData(uint key, uint pos) : key(key), pos(pos) {}
-};
-
-class HybridDBSCAN {
+class HybridDBSCAN : public DBSCAN {
 public:
     HybridDBSCAN(const float epsilon, const uint minpts, DataPointsType dataPoints, uint dataSize, uint blockSize);
     void run();
@@ -26,20 +11,10 @@ public:
     void debug_printNeighborTable();
 
     vector<int> clusterIDs;
-    static const int UNVISITED = -1;
-    static const int NOISE = -2;
 
 private:
-    void constructIndex();
-    void calcCells();
-    float constructGPUResultSet();
-    void constructNeighborTable();
-    void DBSCANwithNeighborTable();
-
-    DataPointsType dataPoints;
-    uint dataSize, gridSize, neighborsCnt;
-    const float epsilon, epsilonPow;
-    const uint minpts, blockSize;
+    uint gridSize, neighborsCnt;
+    const uint blockSize;
 
     array<float, 2> minVals, maxVals;
     array<uint, 2> nCells;
@@ -62,7 +37,4 @@ private:
 
     // neighborTables[orderedID] = ...
     vector<NeighborTable> neighborTables;
-
-    // uint *neighborTable;
-    // vector<vector<uint>> neighborTable;
 };

@@ -9,9 +9,9 @@
 #include <fstream>
 #include <iostream>
 
-#include "DBSCAN.hpp"
-#include "HybridDBSCAN.cuh"
 #include "BPSDBSCAN.hpp"
+#include "HybridDBSCAN.cuh"
+#include "OriginalDBSCAN.hpp"
 #include "global.hpp"
 #include "utils.hpp"
 
@@ -47,11 +47,11 @@ int main(int argc, char *argv[]) {
 
     /***** original DBSCAN *****/
 
-    printf("\n----------- original DBSCAN -----------\n");
+    printf("\n----------- Original DBSCAN -----------\n");
 
-    auto dbscan = DBSCAN(epsilon, minpts, dataPoints, dataSize);
-    dbscan.run();
-    dbscan.print("../data/output/DBSCAN-data-2500-out.csv");
+    auto original_dbscan = OriginalDBSCAN(epsilon, minpts, dataPoints, dataSize);
+    original_dbscan.run();
+    original_dbscan.print("../data/output/DBSCAN-data-2500-out.csv");
 
     /***** Hybrid DBSCAN *****/
     printf("\n----------- Hybrid DBSCAN -----------\n");
@@ -60,16 +60,17 @@ int main(int argc, char *argv[]) {
     hybrid_dbscan.run();
     hybrid_dbscan.print("../data/output/Hybrid-DBSCAN-data-2500-out.csv");
 
-    // check(dataSize, dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
+    check(dataSize, original_dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
 
     /***** BPS-DBSCAN *****/
 
+    printf("\n----------- BPS DBSCAN -----------\n");
+
     auto BPS_dbscan = BPSDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
     BPS_dbscan.run();
-    printf("\n----------- BPS DBSCAN -----------\n");
     BPS_dbscan.print("../data/output/BPS-DBSCAN-data-2500-out.csv");
 
-    check(dataSize, dbscan.clusterIDs, BPS_dbscan.finalClusterIDs);
+    // check(dataSize, original_dbscan.clusterIDs, BPS_dbscan.finalClusterIDs);
 
     return 0;
 }

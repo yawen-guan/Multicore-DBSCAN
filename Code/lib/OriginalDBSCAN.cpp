@@ -1,4 +1,4 @@
-#include "DBSCAN.hpp"
+#include "OriginalDBSCAN.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -8,22 +8,18 @@ using std::endl;
 using std::iostream;
 using std::ofstream;
 
-DBSCAN::DBSCAN(
+OriginalDBSCAN::OriginalDBSCAN(
     const float epsilon,
     const uint minpts,
     DataPointsType dataPoints,
-    uint dataSize) : epsilon(epsilon),
-                     epsilonPow(pow(epsilon, 2)),
-                     minpts(minpts),
-                     dataPoints(dataPoints),
-                     dataSize(dataSize) {
+    uint dataSize) : DBSCAN(epsilon, minpts, dataPoints, dataSize) {
     clusterIDs.resize(dataSize);
     for (int i = 0; i < dataSize; i++) {
         clusterIDs[i] = DBSCAN::UNVISITED;
     }
 }
 
-void DBSCAN::run() {
+void OriginalDBSCAN::run() {
     float start = omp_get_wtime();
 
     int clusterID = 0;
@@ -51,27 +47,27 @@ void DBSCAN::run() {
     }
     float end = omp_get_wtime();
     float elapsed_time_ms = (end - start) * 1000;
-    printf("Time elapsed on original DBSCAN: %f ms\n", elapsed_time_ms);
+    printf("Time elapsed on original OriginalDBSCAN: %f ms\n", elapsed_time_ms);
 }
 
-float DBSCAN::dist(const uint& id0, const uint& id1) {
+float OriginalDBSCAN::dist(const uint& id0, const uint& id1) {
     return pow(dataPoints[0][id0] - dataPoints[0][id1], 2) + pow(dataPoints[1][id0] - dataPoints[1][id1], 2);
 }
 
-vector<uint> DBSCAN::getNeighbors(const uint& id) {
+vector<uint> OriginalDBSCAN::getNeighbors(const uint& id) {
     auto neighbors = vector<uint>();
     neighbors.clear();
     for (uint i = 0; i < dataSize; i++) {
         if (i == id) {
             continue;
-        } else if (DBSCAN::dist(id, i) <= epsilonPow) {
+        } else if (OriginalDBSCAN::dist(id, i) <= epsilonPow) {
             neighbors.push_back(i);
         }
     }
     return neighbors;
 }
 
-void DBSCAN::print(const string& outFile) {
+void OriginalDBSCAN::print(const string& outFile) {
     ofstream out(outFile);
     if (out.is_open()) {
         out << "x,y,clusterID\n";
@@ -86,7 +82,7 @@ void DBSCAN::print(const string& outFile) {
     }
 }
 
-void DBSCAN::debug_printNeighborTable() {
+void OriginalDBSCAN::debug_printNeighborTable() {
     for (uint i = 0; i < dataSize; i++) {
         printf("point %u, neighbors:", i);
         auto neighbors = getNeighbors(i);
