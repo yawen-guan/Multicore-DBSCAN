@@ -1,6 +1,7 @@
 #include "BPSDBSCAN.hpp"
 
 #include "HybridDBSCAN.cuh"
+#include "Shadower.cuh"
 
 #include <fstream>
 #include <iostream>
@@ -68,6 +69,42 @@ void BPSDBSCAN::partition(){
         dataPoints_shadow);
 }
 
+
+void BPSDBSCAN::merge(){
+
+    unsigned long int sizeShadow=dataPoints_shadow[0].size();
+
+    
+    int nowindex = 0;
+    int nextindex = 0;
+    for(int i = 0;i < NCHUNKS; i++){
+        for(int j = 0; j < clusterIDsArray[i].size(); j ++){
+            clusterIDsArray[i][j] += nowindex;
+            if(clusterIDsArray[i][j]>nextindex)nextindex = clusterIDsArray[i][j];
+        }
+        nowindex = nextindex;
+    }
+    
+    auto shadower = Shadower(
+        epsilon, 
+        minpts, 
+        dataPoints_shadow, 
+        sizeShadow, 
+        blockSize, 
+        clusterIDsArray, 
+        pointIDs_shadow, 
+        pointChunkMapping);
+    if(sizeShadow!=0)shadower.run();
+
+    for(int i = 0;i < dataSize; i++){
+        int ind = clusterIDsArray[pointChunkMapping[i].chunkID][pointChunkMapping[i].idxInChunk];
+        while(shadower.merge.find(ind)!= shadower.merge.end()){
+            ind = shadower.merge[ind];
+        }
+        finalClusterIDs[i] = ind;
+    }
+}
+
 void BPSDBSCAN::modifiedDBSCAN(){
     bool enableDenseBox = true;
 
@@ -81,10 +118,10 @@ void BPSDBSCAN::modifiedDBSCAN(){
 
         vector<int> partClusterIDs;  // local cluster IDs
 
-        array<float, 2> minVals, maxVals;
-        array<uint, 2> nCells;
-        uint64 nNonEmptyCells = 0, totalCells = 0, totalNeighbors = 0;
-        generateGridDimensions(partDataPoints, epsilon, minVals, maxVals, nCells, totalCells);
+        array<float, 2> partminVals, partmaxVals;
+        array<uint, 2> partnCells;
+        uint64 partnNonEmptyCells = 0, parttotalCells = 0, parttotalNeighbors = 0;
+        generateGridDimensions(partDataPoints, epsilon, partminVals, partmaxVals, partnCells, parttotalCells);
         printf("Grid: total cells (including empty) %lu\n", totalCells);
 
         /**************** not finish *************/
@@ -94,7 +131,7 @@ void BPSDBSCAN::modifiedDBSCAN(){
         // populateNDGridIndexAndLookupArrayParallel();
 
         /***** dynamic densebox *****/
-        double meanPointsHeuristic = partDataSize / (8.0 * nNonEmptyCells);
+        double meanPointsHeuristic = partDataSize / (8.0 * partnNonEmptyCells);
         if (meanPointsHeuristic < ((1.0 * minpts) * 0.25)) {
             enableDenseBox = false;
         }
@@ -118,9 +155,7 @@ void BPSDBSCAN::modifiedDBSCAN(){
     }
 }
 
-void BPSDBSCAN::merge(){
-    finalClusterIDs = clusterIDsArray[0];
-}
+
 
 
 void BPSDBSCAN::print(const string &outFile) {

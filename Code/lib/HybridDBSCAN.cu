@@ -1,11 +1,7 @@
 #include <thrust/copy.h>
-#include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
-#include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
-#include <thrust/sort.h>
 
-#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <parallel/algorithm>
@@ -13,7 +9,6 @@
 #include "HybridDBSCAN.cuh"
 
 using std::ceil;
-using std::copy;
 using std::cout;
 using std::endl;
 using std::iostream;
@@ -21,10 +16,7 @@ using std::lower_bound;
 using std::max;
 using std::min;
 using std::ofstream;
-using thrust::device_ptr;
 using thrust::device_vector;
-using thrust::raw_pointer_cast;
-using thrust::sort_by_key;
 
 HybridDBSCAN::HybridDBSCAN(
     const float epsilon,
@@ -33,10 +25,7 @@ HybridDBSCAN::HybridDBSCAN(
     uint dataSize,
     uint blockSize) : DBSCAN(epsilon, minpts, dataPoints, dataSize),
                       blockSize(blockSize),
-                      gridSize(0),
-                      orderedIDKey(nullptr),
-                      orderedIDValue(nullptr),
-                      neighborsCnt(0) {
+                      gridSize(0) {
     clusterIDs.resize(dataSize);
     for (int i = 0; i < dataSize; i++) {
         clusterIDs[i] = HybridDBSCAN::UNVISITED;

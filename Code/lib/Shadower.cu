@@ -10,7 +10,7 @@
 #include <iostream>
 #include <parallel/algorithm>
 
-#include "DBSCAN.hpp"
+#include "Shadower.cuh"
 
 using std::ceil;
 using std::copy;
@@ -26,26 +26,34 @@ using thrust::device_vector;
 using thrust::raw_pointer_cast;
 using thrust::sort_by_key;
 
-DBSCAN::DBSCAN(
+Shadower::Shadower(
     const float epsilon,
     const uint minpts,
     DataPointsType dataPoints,
-    uint dataSize) : epsilon(epsilon),
-                     epsilonPow(pow(epsilon, 2)),
-                     minpts(minpts),
-                     dataPoints(dataPoints),
-                     dataSize(dataSize) {
+    uint dataSize,
+    uint blockSize, 
+    vector<vector<int>> clusterIDsArray, 
+    vector<uint> pointIDs_shadow, 
+    vector<PointChunkLookup> pointChunkMapping) : epsilon(epsilon),
+                      epsilonPow(pow(epsilon, 2)),
+                      minpts(minpts),
+                      dataPoints(dataPoints),
+                      dataSize(dataSize),
+                      blockSize(blockSize),
+                      gridSize(0),
+                      orderedIDKey(nullptr),
+                      orderedIDValue(nullptr),
+                      neighborsCnt(0),
+                      clusterIDsArray(clusterIDsArray), 
+                      pointIDs_shadow(pointIDs_shadow), 
+                      pointChunkMapping(pointChunkMapping) {
+    clusterIDs.resize(dataSize);
+    for (int i = 0; i < dataSize; i++) {
+        clusterIDs[i] = Shadower::UNVISITED;
+    }
 }
 
-DBSCAN::~DBSCAN() {
-}
-
-void DBSCAN::calcCells(
-    array<float, 2> &minVals,
-    array<float, 2> &maxVals,
-    array<uint, 2> &nCells,
-    uint64 &totalCells) {
-    // minVals, maxVals
+void Shadower::calcCells() {
     for (uint dim = 0; dim < 2; dim++) {
         minVals[dim] = dataPoints[dim][0];
         maxVals[dim] = dataPoints[dim][0];
@@ -60,7 +68,6 @@ void DBSCAN::calcCells(
         minVals[dim] -= epsilon;
         maxVals[dim] += epsilon;
     }
-    // nCells
     totalCells = 1;
     for (uint dim = 0; dim < 2; dim++) {
         nCells[dim] = ceil((maxVals[dim] - minVals[dim]) / epsilon);
@@ -68,20 +75,8 @@ void DBSCAN::calcCells(
     }
 }
 
-void DBSCAN::constructIndex(
-    array<float, 2> &minVals,
-    array<float, 2> &maxVals,
-    array<uint, 2> &nCells,
-    uint64 &totalCells,
-    uint &gridSize,
-    vector<Grid> &index,
-    vector<uint> &ordered2GridID,
-    vector<uint> &ordered2DataID,
-    vector<uint> &data2OrderedID,
-    vector<uint> &grid2CellID) {
-    calcCells(minVals, maxVals, nCells, totalCells);
-
-    // calculate cellIDs of grid cells
+void Shadower::constructIndex() {
+    calcCells();
     auto cellIDs_dup = vector<uint64>();
     for (uint i = 0; i < dataSize; i++) {
         uint64 l0 = (dataPoints[0][i] - minVals[0]) / epsilon;
@@ -89,8 +84,6 @@ void DBSCAN::constructIndex(
         uint64 cellID = l0 * nCells[1] + l1;
         cellIDs_dup.push_back(cellID);
     }
-    // omp_set_num_threads(NUM_THREADS);
-    // __gnu_parallel::sort(cellIDs_dup.begin(), cellIDs_dup.end());
     std::sort(cellIDs_dup.begin(), cellIDs_dup.end());
     auto cellIDs_uqe = vector<uint64>();
     cellIDs_uqe.push_back(cellIDs_dup[0]);
@@ -104,10 +97,8 @@ void DBSCAN::constructIndex(
     for (uint i = 0; i < cellIDs_uqe.size(); i++) {
         grid2CellID[i] = cellIDs_uqe[i];
     }
-
-    // get dataIDs per non empty cell(aka. grid)
     gridSize = cellIDs_uqe.size();
-    auto gridDataIDs = vector<vector<uint64>>(gridSize);  // dataID per cell
+    auto gridDataIDs = vector<vector<uint64>>(gridSize); 
     for (uint i = 0; i < dataSize; i++) {
         uint64 l0 = (dataPoints[0][i] - minVals[0]) / epsilon;
         uint64 l1 = (dataPoints[1][i] - minVals[1]) / epsilon;
@@ -121,7 +112,6 @@ void DBSCAN::constructIndex(
         gridDataIDs[gridID].push_back(i);
     }
 
-    // construct index
     index.resize(gridSize);
     ordered2DataID.resize(dataSize);
     data2OrderedID.resize(dataSize);
@@ -139,7 +129,7 @@ void DBSCAN::constructIndex(
     }
 }
 
-__device__ int findGridByCellID(const uint cellID, const uint gridSize, const uint *d_grid2CellID) {
+__device__ int findGridByCellID_s(const uint cellID, const uint gridSize, const uint *d_grid2CellID) {
     int l = 0, r = gridSize - 1;
     int mid = (l + r) / 2;
     while (l <= r) {
@@ -155,7 +145,7 @@ __device__ int findGridByCellID(const uint cellID, const uint gridSize, const ui
     return gridSize + 1;
 }
 
-__device__ bool gpuInEpsilon(
+__device__ bool gpuInEpsilon_s(
     const uint orderedID0,
     const uint orderedID1,
     const float epsilonPow,
@@ -167,7 +157,7 @@ __device__ bool gpuInEpsilon(
     return (pow(d_dataPoints[id0] - d_dataPoints[id1], 2) + pow(d_dataPoints[dataSize + id0] - d_dataPoints[dataSize + id1], 2)) <= epsilonPow;
 }
 
-__global__ void gpuCalcGlobal(
+__global__ void gpuCalcGlobal_s(
     const uint dataSize,
     const uint nCells1,
     const uint gridSize,
@@ -182,7 +172,6 @@ __global__ void gpuCalcGlobal(
     uint *d_orderedIDValue) {
     uint orderedID = blockIdx.x * blockDim.x + threadIdx.x;
     if (orderedID >= dataSize) return;
-    // uint dataID = d_ordered2DataID[orderedID];
 
     uint gridID = d_ordered2GridID[orderedID];
     uint cellID = d_grid2CellID[gridID];
@@ -194,8 +183,7 @@ __global__ void gpuCalcGlobal(
                 gridID = d_ordered2GridID[orderedID];
             } else {
                 newCellID = cellID + (i * nCells1 + j);
-                // or a cell2GridID map
-                gridID = findGridByCellID(newCellID, gridSize, d_grid2CellID);
+                gridID = findGridByCellID_s(newCellID, gridSize, d_grid2CellID);
             }
 
             if (gridID < gridSize) {
@@ -203,7 +191,7 @@ __global__ void gpuCalcGlobal(
                     if (orderedID == k) {
                         continue;
                     }
-                    if (gpuInEpsilon(orderedID, k, epsilonPow, dataSize, d_dataPoints, d_ordered2DataID)) {
+                    if (gpuInEpsilon_s(orderedID, k, epsilonPow, dataSize, d_dataPoints, d_ordered2DataID)) {
                         uint idx = atomicAdd(d_cnt, int(1));
                         d_orderedIDKey[idx] = orderedID;
                         d_orderedIDValue[idx] = k;
@@ -214,17 +202,7 @@ __global__ void gpuCalcGlobal(
     }
 }
 
-float DBSCAN::constructGPUResultSet(
-    const array<uint, 2> &nCells,
-    const uint &gridSize,
-    const vector<uint> &ordered2GridID,
-    const vector<uint> &ordered2DataID,
-    const vector<uint> &grid2CellID,
-    const vector<Grid> &index,
-    const uint &blockSize,
-    uint &neighborsCnt,
-    uint *&orderedIDKey,
-    uint *&orderedIDValue) {
+float Shadower::constructGPUResultSet() {
     float gpu_elapsed_time_ms;
     cudaEvent_t start, end;
     cudaEventCreate(&start);
@@ -250,10 +228,10 @@ float DBSCAN::constructGPUResultSet(
 
     uint *d_orderedIDKey;    //key
     uint *d_orderedIDValue;  //value
-    CHECK(cudaMalloc((void **)&d_orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE));
-    CHECK(cudaMalloc((void **)&d_orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE));
-    CHECK(cudaMallocHost((void **)&orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE));
-    CHECK(cudaMallocHost((void **)&orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE));
+    cudaMalloc((void **)&d_orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE);
+    cudaMalloc((void **)&d_orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE);
+    cudaMallocHost((void **)&orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE);
+    cudaMallocHost((void **)&orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE);
 
     uint *d_cnt;
     cudaMalloc((void **)&d_cnt, sizeof(uint));
@@ -261,7 +239,7 @@ float DBSCAN::constructGPUResultSet(
     dim3 dimGrid(ceil((double)dataSize / (double)blockSize));
     dim3 dimBlock(blockSize);
 
-    gpuCalcGlobal<<<dimGrid, dimBlock>>>(dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_cnt, d_orderedIDKey, d_orderedIDValue);
+    gpuCalcGlobal_s<<<dimGrid, dimBlock>>>(dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_cnt, d_orderedIDKey, d_orderedIDValue);
     cudaDeviceSynchronize();
 
     neighborsCnt = 0;
@@ -297,11 +275,7 @@ float DBSCAN::constructGPUResultSet(
     return gpu_elapsed_time_ms;
 }
 
-void DBSCAN::constructNeighborTable(
-    const uint *orderedIDKey,
-    const uint *orderedIDValue,
-    const uint &neighborsCnt,
-    vector<NeighborTable> &neighborTables) {
+void Shadower::constructNeighborTable() {
     auto keyData_uqe = vector<KeyData>();
     keyData_uqe.push_back(KeyData(orderedIDKey[0], 0));
     for (uint i = 1; i < neighborsCnt; i++) {
@@ -323,19 +297,14 @@ void DBSCAN::constructNeighborTable(
     }
 }
 
-void DBSCAN::DBSCANwithNeighborTable(
-    const vector<uint> &data2OrderedID,
-    const vector<uint> &ordered2DataID,
-    const uint *orderedIDValue,
-    const vector<NeighborTable> &neighborTables,
-    vector<int> &clusterIDs) {
+void Shadower::modifiedDBSCAN() {
     auto neighbors = vector<uint>();
     int clusterID = 0, orderedID = -1;
 
     for (uint i = 0; i < dataSize; i++) {
         orderedID = data2OrderedID[i];
 
-        if (clusterIDs[i] != DBSCAN::UNVISITED) {
+        if (clusterIDs[i] != Shadower::UNVISITED) {
             continue;
         }
         neighbors.clear();
@@ -343,8 +312,33 @@ void DBSCAN::DBSCANwithNeighborTable(
         uint size = neighborTables[orderedID].valueIdx_max - neighborTables[orderedID].valueIdx_min + 1;
 
         if ((size + 1) < minpts) {
-            // if (size < minpts) {
-            clusterIDs[i] = DBSCAN::NOISE;
+            clusterIDs[i] = Shadower::NOISE;
+            neighbors.resize(size);
+            for (uint j = neighborTables[orderedID].valueIdx_min; j <= neighborTables[orderedID].valueIdx_max; j++) {
+                neighbors[j - neighborTables[orderedID].valueIdx_min] = orderedIDValue[j];
+            }
+
+            while (neighbors.size() != 0) {
+                uint pOrderedID = neighbors.back();
+                uint p = ordered2DataID[pOrderedID];
+                
+                int pID = clusterIDsArray[pointChunkMapping[pointIDs_shadow[p]].chunkID][pointChunkMapping[pointIDs_shadow[p]].idxInChunk];
+                int iID = clusterIDsArray[pointChunkMapping[pointIDs_shadow[i]].chunkID][pointChunkMapping[pointIDs_shadow[i]].idxInChunk];
+                if(merge.find(pID)==merge.end()){
+                    int t = iID;
+                    bool f = true;
+                    while(merge.find(t)!= merge.end()){
+                        if(t == pID){
+                            f = false;
+                            break;
+                        }
+                        t = merge[t];
+                    }
+                    if(f&&t != pID)merge.emplace(pID,t);
+                }
+
+                neighbors.pop_back();
+            }
         } else {
             clusterIDs[i] = ++clusterID;
             neighbors.resize(size);
@@ -356,10 +350,9 @@ void DBSCAN::DBSCANwithNeighborTable(
                 uint pOrderedID = neighbors.back();
                 uint p = ordered2DataID[pOrderedID];
 
-                if (clusterIDs[p] == DBSCAN::UNVISITED) {
+                if (clusterIDs[p] == Shadower::UNVISITED) {
                     uint newSize = neighborTables[pOrderedID].valueIdx_max - neighborTables[pOrderedID].valueIdx_min + 1;
                     if ((newSize + 1) >= minpts) {
-                        // if (newSize >= minpts) {
                         neighbors.resize(size + newSize);
                         for (uint j = neighborTables[pOrderedID].valueIdx_min; j <= neighborTables[pOrderedID].valueIdx_max; j++) {
                             neighbors[size + j - neighborTables[pOrderedID].valueIdx_min] = orderedIDValue[j];
@@ -367,7 +360,23 @@ void DBSCAN::DBSCANwithNeighborTable(
                     }
                 }
 
-                if (clusterIDs[p] == DBSCAN::UNVISITED || clusterIDs[p] == DBSCAN::NOISE) {
+                int pID = clusterIDsArray[pointChunkMapping[pointIDs_shadow[p]].chunkID][pointChunkMapping[pointIDs_shadow[p]].idxInChunk];
+                int iID = clusterIDsArray[pointChunkMapping[pointIDs_shadow[i]].chunkID][pointChunkMapping[pointIDs_shadow[i]].idxInChunk];
+                if(merge.find(pID)==merge.end()){
+                    int t = iID;
+                    bool f = true;
+                    while(merge.find(t)!= merge.end()){
+                        if(t == pID){
+                            f = false;
+                            break;
+                        }
+                        t = merge[t];
+                    }
+                    if(f&&t != pID)merge.emplace(pID,t);
+                }
+                
+
+                if (clusterIDs[p] == Shadower::UNVISITED || clusterIDs[p] == Shadower::NOISE) {
                     clusterIDs[p] = clusterID;
                 }
 
@@ -375,4 +384,11 @@ void DBSCAN::DBSCANwithNeighborTable(
             }
         }
     }
+}
+
+void Shadower::run() {
+    constructIndex();
+    float gpu_elapsed_time_ms = constructGPUResultSet();
+    constructNeighborTable();
+    modifiedDBSCAN();
 }
