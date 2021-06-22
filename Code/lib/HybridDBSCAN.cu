@@ -301,7 +301,7 @@ void HybridDBSCAN::constructNeighborTable() {
     }
 }
 
-void HybridDBSCAN::modifiedDBSCAN() {
+void HybridDBSCAN::DBSCANwithNeighborTable() {
     auto neighbors = vector<uint>();
     int clusterID = 0, orderedID = -1;
 
@@ -316,6 +316,7 @@ void HybridDBSCAN::modifiedDBSCAN() {
         uint size = neighborTables[orderedID].valueIdx_max - neighborTables[orderedID].valueIdx_min + 1;
 
         if ((size + 1) < minpts) {
+            // if (size < minpts) {
             clusterIDs[i] = HybridDBSCAN::NOISE;
         } else {
             clusterIDs[i] = ++clusterID;
@@ -331,6 +332,7 @@ void HybridDBSCAN::modifiedDBSCAN() {
                 if (clusterIDs[p] == HybridDBSCAN::UNVISITED) {
                     uint newSize = neighborTables[pOrderedID].valueIdx_max - neighborTables[pOrderedID].valueIdx_min + 1;
                     if ((newSize + 1) >= minpts) {
+                        // if (newSize >= minpts) {
                         neighbors.resize(size + newSize);
                         for (uint j = neighborTables[pOrderedID].valueIdx_min; j <= neighborTables[pOrderedID].valueIdx_max; j++) {
                             neighbors[size + j - neighborTables[pOrderedID].valueIdx_min] = orderedIDValue[j];
@@ -354,7 +356,7 @@ void HybridDBSCAN::run() {
     float gpu_elapsed_time_ms = constructGPUResultSet();
     constructNeighborTable();
     // debug_printNeighborTable();
-    modifiedDBSCAN();
+    DBSCANwithNeighborTable();
     float end = omp_get_wtime();
     float elapsed_time_ms = (end - start) * 1000;
     printf("Time elapsed on Hybrid-DBSCAN: %f ms; gpu_elapsed_time: %f ms\n", elapsed_time_ms, gpu_elapsed_time_ms);
@@ -373,6 +375,16 @@ void HybridDBSCAN::print(const string &outFile) {
     } else {
         cout << "Unable to open file " << outFile << endl;
     }
+}
+
+vector<uint> HybridDBSCAN::debug_getNeighbors(const uint &id) {
+    uint orderedID = data2OrderedID[id];
+    auto neighbors = vector<uint>();
+    for (int i = neighborTables[orderedID].valueIdx_min; i <= neighborTables[orderedID].valueIdx_max; i++) {
+        neighbors.push_back(ordered2DataID[orderedIDValue[i]]);
+    }
+    sort(neighbors.begin(), neighbors.end());
+    return neighbors;
 }
 
 void HybridDBSCAN::debug_printNeighborTable() {

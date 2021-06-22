@@ -23,7 +23,7 @@ using std::unordered_set;
 using std::vector;
 
 #define NUM_THREADS 6
-#define GPU_BUFFER_SIZE 10000000
+#define GPU_BUFFER_SIZE 100000000
 
 typedef unsigned int uint;
 typedef unsigned long uint64;

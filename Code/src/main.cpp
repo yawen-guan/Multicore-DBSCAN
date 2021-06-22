@@ -1,5 +1,6 @@
 #include <omp.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -16,6 +17,7 @@
 using std::cin;
 using std::cout;
 using std::endl;
+using std::sort;
 
 void BPS_DBSCAN(
     const float epsilon,
@@ -69,8 +71,6 @@ void BPS_DBSCAN(
         }
     }
 
-    
-
     double endTime_DBSCAN = omp_get_wtime();
     printf("\n----------- BPS-HDBSCAN -----------\n");
     printf("Time total to BPS-HDBSCAN: %f\n", endTime_DBSCAN - startTime_DBSCAN);
@@ -103,19 +103,20 @@ int main(int argc, char *argv[]) {
 
     /***** original DBSCAN *****/
 
+    printf("\n----------- original DBSCAN -----------\n");
+
     auto dbscan = DBSCAN(epsilon, minpts, dataPoints, dataSize);
     dbscan.run();
-    printf("\n----------- original DBSCAN -----------\n");
     dbscan.print("../data/output/DBSCAN-data-2500-out.csv");
 
     /***** Hybrid DBSCAN *****/
+    printf("\n----------- Hybrid DBSCAN -----------\n");
 
     auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize);
     hybrid_dbscan.run();
-    printf("\n----------- Hybrid DBSCAN -----------\n");
     hybrid_dbscan.print("../data/output/Hybrid-DBSCAN-data-2500-out.csv");
 
-    check(dataSize, dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
+    // check(dataSize, dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
 
     /***** initial clusters *****/
 

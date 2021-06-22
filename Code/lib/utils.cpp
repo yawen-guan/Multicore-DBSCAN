@@ -15,13 +15,17 @@ using std::ifstream;
 using std::stringstream;
 
 void check(const uint dataSize, const vector<int> &clusterIDs0, const vector<int> &clusterIDs1) {
+    bool pass = true;
     for (int i = 0; i < dataSize; i++) {
         if (clusterIDs0[i] != clusterIDs1[i]) {
-            fprintf(stderr, "Error: Wrong Answer.\n");
-            return;
+            fprintf(stderr, "Error: Wrong Answer. clusterIDs0[%d] = %d, clusterIDs1[%d] = %d\n", i, clusterIDs0[i], i, clusterIDs1[i]);
+            // return;
+            pass = false;
         }
     }
-    printf("Check Passed.\n");
+    if (pass) {
+        printf("Check Passed.\n");
+    }
 }
 
 DataPointsType importDataset(const string datafile) {

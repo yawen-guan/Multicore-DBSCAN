@@ -30,16 +30,15 @@ void DBSCAN::run() {
     for (uint i = 0; i < dataSize; i++) {
         if (clusterIDs[i] == DBSCAN::UNVISITED) {
             auto neighbors = getNeighbors(i);
-            if (neighbors.size() < minpts) {
+            if ((neighbors.size() + 1) < minpts) {
                 clusterIDs[i] = DBSCAN::NOISE;
             } else {
                 clusterIDs[i] = ++clusterID;
                 for (uint j = 0; j < neighbors.size(); j++) {
-                    // printf("j = %u, size = %d\n", j, neighbors.size());
                     uint p = neighbors[j];
                     if (clusterIDs[p] == DBSCAN::UNVISITED) {
                         auto pNeighbors = getNeighbors(p);
-                        if (pNeighbors.size() >= minpts) {
+                        if ((pNeighbors.size() + 1) >= minpts) {
                             neighbors.insert(neighbors.end(), pNeighbors.begin(), pNeighbors.end());
                         }
                     }
@@ -63,7 +62,9 @@ vector<uint> DBSCAN::getNeighbors(const uint& id) {
     auto neighbors = vector<uint>();
     neighbors.clear();
     for (uint i = 0; i < dataSize; i++) {
-        if (DBSCAN::dist(id, i) <= epsilonPow) {
+        if (i == id) {
+            continue;
+        } else if (DBSCAN::dist(id, i) <= epsilonPow) {
             neighbors.push_back(i);
         }
     }
@@ -83,4 +84,15 @@ void DBSCAN::print(const string& outFile) {
     } else {
         cout << "Unable to open file " << outFile << endl;
     }
+}
+
+void DBSCAN::debug_printNeighborTable() {
+    for (uint i = 0; i < dataSize; i++) {
+        printf("point %u, neighbors:", i);
+        auto neighbors = getNeighbors(i);
+        for (uint j = 0; j < neighbors.size(); j++) {
+            printf("%u, ", neighbors[j]);
+        }
+    }
+    printf("\n");
 }

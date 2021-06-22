@@ -22,6 +22,7 @@ public:
     HybridDBSCAN(const float epsilon, const uint minpts, DataPointsType dataPoints, uint dataSize, uint blockSize);
     void run();
     void print(const string &outFile);
+    vector<uint> debug_getNeighbors(const uint &id);
     void debug_printNeighborTable();
 
     vector<int> clusterIDs;
@@ -33,7 +34,7 @@ private:
     void calcCells();
     float constructGPUResultSet();
     void constructNeighborTable();
-    void modifiedDBSCAN();
+    void DBSCANwithNeighborTable();
 
     DataPointsType dataPoints;
     uint dataSize, gridSize, neighborsCnt;
