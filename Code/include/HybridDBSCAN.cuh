@@ -7,11 +7,14 @@ struct Grid {
     uint orderedID_max;
 };
 
-struct NeighborPair {
-    uint orderedID_x;
-    uint orderedID_y;
-    NeighborPair(uint orderedID_x) : orderedID_x(orderedID_x) {}
-    NeighborPair(uint orderedID_x, uint orderedID_y) : orderedID_x(orderedID_x), orderedID_y(orderedID_y) {}
+struct NeighborTable {
+    uint valueIdx_min;
+    uint valueIdx_max;
+};
+
+struct KeyData {
+    uint key, pos;
+    KeyData(uint key, uint pos) : key(key), pos(pos) {}
 };
 
 class HybridDBSCAN {
@@ -29,10 +32,11 @@ private:
     void constructIndex();
     void calcCells();
     float constructGPUResultSet();
+    void constructNeighborTable();
     void modifiedDBSCAN();
 
     DataPointsType dataPoints;
-    uint dataSize, gridSize;
+    uint dataSize, gridSize, neighborsCnt;
     const float epsilon, epsilonPow;
     const uint minpts, blockSize;
 
@@ -50,9 +54,14 @@ private:
     // gridID to cellID
     vector<uint> grid2CellID;
     // cellID to gridID
-    unordered_map<uint, uint> cell2GridID;
-    // clusterIDs[dataID] = clusterID
+    // unordered_map<uint, uint> cell2GridID;
+
+    // gpuResultSet key, value
+    uint *orderedIDKey, *orderedIDValue;
+
+    // neighborTables[orderedID] = ...
+    vector<NeighborTable> neighborTables;
 
     // uint *neighborTable;
-    vector<vector<uint>> neighborTable;
+    // vector<vector<uint>> neighborTable;
 };

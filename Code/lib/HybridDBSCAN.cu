@@ -1,7 +1,11 @@
 #include <thrust/copy.h>
+#include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
+#include <thrust/sort.h>
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <parallel/algorithm>
@@ -9,6 +13,7 @@
 #include "HybridDBSCAN.cuh"
 
 using std::ceil;
+using std::copy;
 using std::cout;
 using std::endl;
 using std::iostream;
@@ -16,7 +21,10 @@ using std::lower_bound;
 using std::max;
 using std::min;
 using std::ofstream;
+using thrust::device_ptr;
 using thrust::device_vector;
+using thrust::raw_pointer_cast;
+using thrust::sort_by_key;
 
 HybridDBSCAN::HybridDBSCAN(
     const float epsilon,
@@ -29,7 +37,10 @@ HybridDBSCAN::HybridDBSCAN(
                       dataPoints(dataPoints),
                       dataSize(dataSize),
                       blockSize(blockSize),
-                      gridSize(0) {
+                      gridSize(0),
+                      orderedIDKey(nullptr),
+                      orderedIDValue(nullptr),
+                      neighborsCnt(0) {
     clusterIDs.resize(dataSize);
     for (int i = 0; i < dataSize; i++) {
         clusterIDs[i] = HybridDBSCAN::UNVISITED;
@@ -82,10 +93,8 @@ void HybridDBSCAN::constructIndex() {
     }
 
     grid2CellID.resize(cellIDs_uqe.size());
-    cell2GridID.clear();
     for (uint i = 0; i < cellIDs_uqe.size(); i++) {
         grid2CellID[i] = cellIDs_uqe[i];
-        cell2GridID[cellIDs_uqe[i]] = i;
     }
 
     // get dataIDs per non empty cell(aka. grid)
@@ -160,12 +169,13 @@ __global__ void gpuCalcGlobal(
     const uint *d_ordered2GridID,
     const uint *d_grid2CellID,
     const Grid *d_index,
-    uint *d_neighborTable) {
+    uint *d_cnt,
+    uint *d_orderedIDKey,
+    uint *d_orderedIDValue) {
     uint orderedID = blockIdx.x * blockDim.x + threadIdx.x;
     if (orderedID >= dataSize) return;
     // uint dataID = d_ordered2DataID[orderedID];
 
-    uint cnt = 0;
     uint gridID = d_ordered2GridID[orderedID];
     uint cellID = d_grid2CellID[gridID];
     uint newCellID = 0;
@@ -182,15 +192,18 @@ __global__ void gpuCalcGlobal(
 
             if (gridID < gridSize) {
                 for (uint k = d_index[gridID].orderedID_min; k <= d_index[gridID].orderedID_max; k++) {
+                    if (orderedID == k) {
+                        continue;
+                    }
                     if (gpuInEpsilon(orderedID, k, epsilonPow, dataSize, d_dataPoints, d_ordered2DataID)) {
-                        cnt++;
-                        d_neighborTable[orderedID * dataSize + cnt] = k;
+                        uint idx = atomicAdd(d_cnt, int(1));
+                        d_orderedIDKey[idx] = orderedID;
+                        d_orderedIDValue[idx] = k;
                     }
                 }
             }
         }
     }
-    d_neighborTable[orderedID * dataSize + 0] = cnt;
 }
 
 float HybridDBSCAN::constructGPUResultSet() {
@@ -217,66 +230,119 @@ float HybridDBSCAN::constructGPUResultSet() {
     cudaMalloc((void **)&d_index, sizeof(Grid) * dataSize);
     cudaMemcpy(d_index, index.data(), sizeof(Grid) * dataSize, cudaMemcpyHostToDevice);
 
-    uint *d_neighborTable;
-    cudaMalloc((void **)&d_neighborTable, sizeof(uint) * dataSize * dataSize);
+    uint *d_orderedIDKey;    //key
+    uint *d_orderedIDValue;  //value
+    cudaMalloc((void **)&d_orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE);
+    cudaMalloc((void **)&d_orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE);
+    cudaMallocHost((void **)&orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE);
+    cudaMallocHost((void **)&orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE);
+
+    uint *d_cnt;
+    cudaMalloc((void **)&d_cnt, sizeof(uint));
 
     dim3 dimGrid(ceil((double)dataSize / (double)blockSize));
     dim3 dimBlock(blockSize);
 
-    gpuCalcGlobal<<<dimGrid, dimBlock>>>(dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_neighborTable);
+    gpuCalcGlobal<<<dimGrid, dimBlock>>>(dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_cnt, d_orderedIDKey, d_orderedIDValue);
     cudaDeviceSynchronize();
 
-    uint *h_neighborTable = (uint *)malloc(sizeof(uint) * dataSize * dataSize);
-    cudaMemcpy(h_neighborTable, d_neighborTable, sizeof(uint) * dataSize * dataSize, cudaMemcpyDeviceToHost);
+    neighborsCnt = 0;
+    cudaMemcpy(&neighborsCnt, d_cnt, sizeof(uint), cudaMemcpyDeviceToHost);
+
+    // sort gpuResultSet
+    device_ptr<uint> d_keyPtr(d_orderedIDKey);
+    device_ptr<uint> d_valuePtr(d_orderedIDValue);
+
+    try {
+        sort_by_key(d_keyPtr, d_keyPtr + neighborsCnt, d_valuePtr);
+    } catch (std::bad_alloc &e) {
+        fprintf(stderr, "Error: Ran out of memory while sorting.\n");
+        exit(-1);
+    }
+
+    cudaMemcpy(raw_pointer_cast(orderedIDKey), raw_pointer_cast(d_keyPtr), sizeof(uint) * neighborsCnt, cudaMemcpyDeviceToHost);
+    cudaMemcpy(raw_pointer_cast(orderedIDValue), raw_pointer_cast(d_valuePtr), sizeof(uint) * neighborsCnt, cudaMemcpyDeviceToHost);
 
     cudaFree(d_dataPoints);
     cudaFree(d_ordered2DataID);
     cudaFree(d_ordered2GridID);
     cudaFree(d_grid2CellID);
     cudaFree(d_index);
-    cudaFree(d_neighborTable);
+    cudaFree(d_cnt);
+    cudaFree(d_orderedIDKey);
+    cudaFree(d_orderedIDValue);
 
     cudaEventRecord(end, 0);
     cudaEventSynchronize(end);
     cudaEventElapsedTime(&gpu_elapsed_time_ms, start, end);
 
-    neighborTable.resize(dataSize);
-    for (uint i = 0; i < dataSize; i++) {
-        uint *start = h_neighborTable + i * dataSize;
-        uint size = start[0];
-        neighborTable[i] = vector<uint>(start + 1, start + size + 1);
-    }
-    free(h_neighborTable);
-
     return gpu_elapsed_time_ms;
 }
 
+void HybridDBSCAN::constructNeighborTable() {
+    auto keyData_uqe = vector<KeyData>();
+    keyData_uqe.push_back(KeyData(orderedIDKey[0], 0));
+    for (uint i = 1; i < neighborsCnt; i++) {
+        if (orderedIDKey[i] != orderedIDKey[i - 1]) {
+            keyData_uqe.push_back(KeyData(orderedIDKey[i], i));
+        }
+    }
+
+    neighborTables.resize(dataSize);
+    uint key = 0;
+    for (uint i = 0; i < keyData_uqe.size(); i++) {
+        key = keyData_uqe[i].key;
+        neighborTables[key].valueIdx_min = keyData_uqe[i].pos;
+        if (i == keyData_uqe.size() - 1) {
+            neighborTables[key].valueIdx_max = neighborsCnt - 1;
+        } else {
+            neighborTables[key].valueIdx_max = keyData_uqe[i + 1].pos - 1;
+        }
+    }
+}
+
 void HybridDBSCAN::modifiedDBSCAN() {
+    auto neighbors = vector<uint>();
     int clusterID = 0, orderedID = -1;
+
     for (uint i = 0; i < dataSize; i++) {
         orderedID = data2OrderedID[i];
 
-        if (clusterIDs[i] == HybridDBSCAN::UNVISITED) {
-            auto neighbors = neighborTable[orderedID];
-            if (neighbors.size() < minpts) {
-                clusterIDs[i] = HybridDBSCAN::NOISE;
-            } else {
-                clusterIDs[i] = ++clusterID;
-                for (uint j = 0; j < neighbors.size(); j++) {
-                    // printf("j = %u, size = %d\n", j, neighbors.size());
-                    uint pOrderedID = neighbors[j];
-                    uint p = ordered2DataID[pOrderedID];
+        if (clusterIDs[i] != HybridDBSCAN::UNVISITED) {
+            continue;
+        }
+        neighbors.clear();
 
-                    if (clusterIDs[p] == HybridDBSCAN::UNVISITED) {
-                        auto pNeighbors = neighborTable[pOrderedID];
-                        if (pNeighbors.size() >= minpts) {
-                            neighbors.insert(neighbors.end(), pNeighbors.begin(), pNeighbors.end());
+        uint size = neighborTables[orderedID].valueIdx_max - neighborTables[orderedID].valueIdx_min + 1;
+
+        if ((size + 1) < minpts) {
+            clusterIDs[i] = HybridDBSCAN::NOISE;
+        } else {
+            clusterIDs[i] = ++clusterID;
+            neighbors.resize(size);
+            for (uint j = neighborTables[orderedID].valueIdx_min; j <= neighborTables[orderedID].valueIdx_max; j++) {
+                neighbors[j - neighborTables[orderedID].valueIdx_min] = orderedIDValue[j];
+            }
+
+            while (neighbors.size() != 0) {
+                uint pOrderedID = neighbors.back();
+                uint p = ordered2DataID[pOrderedID];
+
+                if (clusterIDs[p] == HybridDBSCAN::UNVISITED) {
+                    uint newSize = neighborTables[pOrderedID].valueIdx_max - neighborTables[pOrderedID].valueIdx_min + 1;
+                    if ((newSize + 1) >= minpts) {
+                        neighbors.resize(size + newSize);
+                        for (uint j = neighborTables[pOrderedID].valueIdx_min; j <= neighborTables[pOrderedID].valueIdx_max; j++) {
+                            neighbors[size + j - neighborTables[pOrderedID].valueIdx_min] = orderedIDValue[j];
                         }
                     }
-                    if (clusterIDs[p] == HybridDBSCAN::UNVISITED || clusterIDs[p] == HybridDBSCAN::NOISE) {
-                        clusterIDs[p] = clusterID;
-                    }
                 }
+
+                if (clusterIDs[p] == HybridDBSCAN::UNVISITED || clusterIDs[p] == HybridDBSCAN::NOISE) {
+                    clusterIDs[p] = clusterID;
+                }
+
+                neighbors.pop_back();
             }
         }
     }
@@ -286,6 +352,8 @@ void HybridDBSCAN::run() {
     float start = omp_get_wtime();
     constructIndex();
     float gpu_elapsed_time_ms = constructGPUResultSet();
+    constructNeighborTable();
+    // debug_printNeighborTable();
     modifiedDBSCAN();
     float end = omp_get_wtime();
     float elapsed_time_ms = (end - start) * 1000;
@@ -311,8 +379,8 @@ void HybridDBSCAN::debug_printNeighborTable() {
     for (int i = 0; i < dataSize; i++) {
         uint orderedID = data2OrderedID[i];
         printf("\ndataID = %d, neighbors's dataID: ", i);
-        for (int j = 0; j < neighborTable[orderedID].size(); j++) {
-            printf("%d, ", ordered2DataID[neighborTable[orderedID][j]]);
+        for (int j = neighborTables[orderedID].valueIdx_min; j <= neighborTables[orderedID].valueIdx_max; j++) {
+            printf("%d, ", ordered2DataID[orderedIDValue[j]]);
         }
     }
     printf("\n");
