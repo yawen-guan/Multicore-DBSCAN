@@ -6,8 +6,8 @@
 #include <iostream>
 #include <sstream>
 
-#define min(a, b) (((a) < (b)) ? (a) : (b))
-
+using std::max;
+using std::min;
 using std::cout;
 using std::endl;
 using std::getline;
