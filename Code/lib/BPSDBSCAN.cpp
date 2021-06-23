@@ -103,7 +103,7 @@ void BPSDBSCAN::merge() {
 void BPSDBSCAN::modifiedDBSCAN() {
     bool enableDenseBox = true;
 
-#pragma omp parallel for num_threads(NUM_THREADS) shared(clusterIDsArray, partDataPointsArray) schedule(dynamic, 1)
+// #pragma omp parallel for num_threads(NUM_THREADS) shared(clusterIDsArray, partDataPointsArray) schedule(dynamic, 1)
     for (uint partID = 0; partID < NCHUNKS; partID++) {
         int tid = omp_get_thread_num();
 
@@ -145,7 +145,7 @@ void BPSDBSCAN::modifiedDBSCAN() {
             partClusterIDs = hybrid_dbscan.clusterIDs;
         }
 
-#pragma omp critical
+// #pragma omp critical
         {
             clusterIDsArray[partID] = partClusterIDs;
         }
