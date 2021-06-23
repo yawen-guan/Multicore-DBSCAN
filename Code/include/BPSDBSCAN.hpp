@@ -2,6 +2,7 @@
 
 #include "global.hpp"
 #include "utils.hpp"
+#include "DenseBox.hpp"
 
 class BPSDBSCAN {
 public:

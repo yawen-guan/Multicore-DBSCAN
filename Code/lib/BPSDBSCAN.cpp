@@ -1,10 +1,10 @@
 #include "BPSDBSCAN.hpp"
 
-#include "HybridDBSCAN.cuh"
-#include "Shadower.cuh"
-
 #include <fstream>
 #include <iostream>
+
+#include "HybridDBSCAN.cuh"
+#include "Shadower.cuh"
 
 using std::ceil;
 using std::cout;
@@ -15,7 +15,6 @@ using std::max;
 using std::min;
 using std::ofstream;
 
-
 BPSDBSCAN::BPSDBSCAN(
     const float epsilon,
     const uint minpts,
@@ -23,14 +22,14 @@ BPSDBSCAN::BPSDBSCAN(
     uint dataSize,
     uint blockSize,
     const uint NCHUNKS) : epsilon(epsilon),
-                      epsilonPow(pow(epsilon, 2)),
-                      minpts(minpts),
-                      dataPoints(dataPoints),
-                      dataSize(dataSize),
-                      blockSize(blockSize),
-                      NCHUNKS(NCHUNKS) {
+                          epsilonPow(pow(epsilon, 2)),
+                          minpts(minpts),
+                          dataPoints(dataPoints),
+                          dataSize(dataSize),
+                          blockSize(blockSize),
+                          NCHUNKS(NCHUNKS) {
     finalClusterIDs.resize(dataSize);
-    
+
     for (int i = 0; i < dataSize; i++) {
         finalClusterIDs[i] = BPSDBSCAN::UNVISITED;
     }
@@ -39,11 +38,10 @@ BPSDBSCAN::BPSDBSCAN(
         clusterIDsArray[i].clear();
         clusterIDsArray[i].shrink_to_fit();
     }
-    binBounaries.resize(NCHUNKS+1);
-    
+    binBounaries.resize(NCHUNKS + 1);
 }
 
-void BPSDBSCAN::partition(){
+void BPSDBSCAN::partition() {
     generateGridDimensions(dataPoints, epsilon, minVals, maxVals, nCells, totalCells);
 
     generatePartitions(
@@ -69,43 +67,40 @@ void BPSDBSCAN::partition(){
         dataPoints_shadow);
 }
 
+void BPSDBSCAN::merge() {
+    unsigned long int sizeShadow = dataPoints_shadow[0].size();
 
-void BPSDBSCAN::merge(){
-
-    unsigned long int sizeShadow=dataPoints_shadow[0].size();
-
-    
     int nowindex = 0;
     int nextindex = 0;
-    for(int i = 0;i < NCHUNKS; i++){
-        for(int j = 0; j < clusterIDsArray[i].size(); j ++){
+    for (int i = 0; i < NCHUNKS; i++) {
+        for (int j = 0; j < clusterIDsArray[i].size(); j++) {
             clusterIDsArray[i][j] += nowindex;
-            if(clusterIDsArray[i][j]>nextindex)nextindex = clusterIDsArray[i][j];
+            if (clusterIDsArray[i][j] > nextindex) nextindex = clusterIDsArray[i][j];
         }
         nowindex = nextindex;
     }
-    
-    auto shadower = Shadower(
-        epsilon, 
-        minpts, 
-        dataPoints_shadow, 
-        sizeShadow, 
-        blockSize, 
-        clusterIDsArray, 
-        pointIDs_shadow, 
-        pointChunkMapping);
-    if(sizeShadow!=0)shadower.run();
 
-    for(int i = 0;i < dataSize; i++){
+    auto shadower = Shadower(
+        epsilon,
+        minpts,
+        dataPoints_shadow,
+        sizeShadow,
+        blockSize,
+        clusterIDsArray,
+        pointIDs_shadow,
+        pointChunkMapping);
+    if (sizeShadow != 0) shadower.run();
+
+    for (int i = 0; i < dataSize; i++) {
         int ind = clusterIDsArray[pointChunkMapping[i].chunkID][pointChunkMapping[i].idxInChunk];
-        while(shadower.merge.find(ind)!= shadower.merge.end()){
+        while (shadower.merge.find(ind) != shadower.merge.end()) {
             ind = shadower.merge[ind];
         }
         finalClusterIDs[i] = ind;
     }
 }
 
-void BPSDBSCAN::modifiedDBSCAN(){
+void BPSDBSCAN::modifiedDBSCAN() {
     bool enableDenseBox = true;
 
 #pragma omp parallel for num_threads(NUM_THREADS) shared(clusterIDsArray, partDataPointsArray) schedule(dynamic, 1)
@@ -139,8 +134,10 @@ void BPSDBSCAN::modifiedDBSCAN(){
 
         vector<uint> queryPointIDs;  // Point ids that need to be searched on the GPU (weren't found by dense box)
 
-        if (enableDenseBox && 0) {
-            /***** handle densebox *****/
+        if (enableDenseBox) {
+            auto denseBox = DenseBox(epsilon, minpts, partDataPoints);
+            denseBox.test();
+            partClusterIDs = denseBox.getCluster();
         } else {
             auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, partDataPoints, partDataPoints[0].size(), blockSize);
             hybrid_dbscan.run();
@@ -154,9 +151,6 @@ void BPSDBSCAN::modifiedDBSCAN(){
         }
     }
 }
-
-
-
 
 void BPSDBSCAN::print(const string &outFile) {
     ofstream out(outFile);
@@ -173,7 +167,7 @@ void BPSDBSCAN::print(const string &outFile) {
     }
 }
 
-void BPSDBSCAN::run(){
+void BPSDBSCAN::run() {
     float start = omp_get_wtime();
     partition();
     modifiedDBSCAN();
