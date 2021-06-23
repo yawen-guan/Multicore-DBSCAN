@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
@@ -398,7 +399,7 @@ void DBSCAN::constructResultSetAndNeighborTable(
     for (uint i = 0; i < NCHUNKS; i++) {
         uint chunkID = i;
         int streamID = omp_get_thread_num();
-        printf("chunkID = %u, streamID = %d\n", chunkID, streamID);
+        // printf("chunkID = %u, streamID = %d\n", chunkID, streamID);
 
         neighborsCnts[streamID] = 0;
         CHECK(cudaMemcpyAsync(&d_cnt[streamID], &neighborsCnts[streamID], sizeof(uint), cudaMemcpyHostToDevice, stream[streamID]));
@@ -508,6 +509,21 @@ void DBSCAN::DBSCANwithNeighborTable(
 
                 neighbors.pop_back();
             }
+        }
+    }
+}
+
+void DBSCAN::test() {
+    omp_set_num_threads(10);
+
+#pragma omp parallel for schedule(static, 1) num_threads(10)
+    for (uint i = 0; i < 10; i++) {
+        uint chunkID = i;
+        int streamID = omp_get_thread_num();
+        printf("chunkID = %u, streamID = %d\n", chunkID, streamID);
+        if (i == 9) {
+            int nthreads = omp_get_num_threads();
+            printf("Number of threads = %d\n", nthreads);
         }
     }
 }

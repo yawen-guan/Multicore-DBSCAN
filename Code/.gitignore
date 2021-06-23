@@ -38,5 +38,7 @@ docker/chroot.tar.gz
 *.dat
 
 tmp/
+obj/
+target/
 
 .python-version

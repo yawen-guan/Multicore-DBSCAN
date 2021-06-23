@@ -29,6 +29,8 @@ public:
     static const int UNVISITED = -1;
     static const int NOISE = -2;
 
+    void test();
+
 protected:
     void calcCells(
         array<float, 2> &minVals,

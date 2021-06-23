@@ -51,14 +51,14 @@ int main(int argc, char *argv[]) {
 
     // auto original_dbscan = OriginalDBSCAN(epsilon, minpts, dataPoints, dataSize);
     // original_dbscan.run();
-    // original_dbscan.print("../data/output/DBSCAN-data-2500-out.csv");
+    // original_dbscan.print("./data/output/DBSCAN-data-2500-out.csv");
 
     /***** Hybrid DBSCAN *****/
     printf("\n----------- Hybrid DBSCAN -----------\n");
 
     auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
     hybrid_dbscan.run();
-    hybrid_dbscan.print("../data/output/Hybrid-DBSCAN-data-2500-out.csv");
+    hybrid_dbscan.print("./data/output/Hybrid-DBSCAN-data-2500-out.csv");
 
     // check(dataSize, original_dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
 
@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
 
     auto BPS_dbscan = BPSDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
     BPS_dbscan.run();
-    BPS_dbscan.print("../data/output/BPS-DBSCAN-data-2500-out.csv");
+    BPS_dbscan.print("./data/output/BPS-DBSCAN-data-2500-out.csv");
 
     // check(dataSize, original_dbscan.clusterIDs, BPS_dbscan.finalClusterIDs);
 
