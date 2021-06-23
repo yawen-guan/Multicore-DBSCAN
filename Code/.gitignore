@@ -35,6 +35,7 @@ __pycache__
 docker/chroot.tar.gz
 
 *.swp
+*.dat
 
 tmp/
 
