@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
     hybrid_dbscan.run();
     hybrid_dbscan.print("../data/output/Hybrid-DBSCAN-data-2500-out.csv");
 
-    check(dataSize, original_dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
+    // check(dataSize, original_dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
 
     /***** BPS-DBSCAN *****/
 

@@ -47,6 +47,6 @@ void generatePartitionDatasets(
     vector<DataPointsType> &partDataPointsArray,
     vector<PointChunkLookup> &pointChunkMapping,
     vector<uint> &pointIDs_shadow,
-    DataPointsType dataPoints_shadow);
+    DataPointsType &dataPoints_shadow);
 
 void check(const uint dataSize, const vector<int> &clusterIDs0, const vector<int> &clusterIDs1);

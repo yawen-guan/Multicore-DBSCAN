@@ -138,19 +138,14 @@ vector<uint> HybridDBSCAN::debug_getNeighbors(const uint &id) {
 
 void HybridDBSCAN::debug_printNeighborTable() {
     printf("in HybridDBSCAN::debug_printNeighborTable\n");
-    // for (int i = 0; i < dataSize; i++) {
-    //     printf("dataID = %d, orderedID = %d\n", i, data2OrderedID[i]);
-    // }
 
     for (uint i = 0; i < dataSize; i++) {
-        // printf("i = %u\n", i);
         uint orderedID = data2OrderedID[i];
         printf("\ndataID = %u, orderedID = %u, valueIdx_min = %d, valueIdx_max = %d\n", i, orderedID, neighborTables[orderedID].valueIdx_min, neighborTables[orderedID].valueIdx_max);
-        // for (int j = neighborTables[orderedID].valueIdx_min; j <= neighborTables[orderedID].valueIdx_max; j++) {
-        //     printf("%d\n", neighborTables[orderedID].values[j]);
-        //     // printf("%d, ", ordered2DataID[neighborTables[orderedID].values[j]]);
-        // }
-        // printf(" end.\n");
+        for (int j = neighborTables[orderedID].valueIdx_min; j <= neighborTables[orderedID].valueIdx_max; j++) {
+            printf("%d, ", ordered2DataID[neighborTables[orderedID].values[j]]);
+        }
+        printf("\n");
     }
     printf("\n");
     printf("finish HybridDBSCAN::debug_printNeighborTable\n");

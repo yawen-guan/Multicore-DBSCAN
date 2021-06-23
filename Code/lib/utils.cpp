@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include "Dataset.hpp"
 
 using std::cout;
 using std::endl;
@@ -29,24 +30,30 @@ void check(const uint dataSize, const vector<int> &clusterIDs0, const vector<int
 }
 
 DataPointsType importDataset(const string datafile) {
-    DataPointsType dataPoints;
-    ifstream in(datafile);
-    string str;
-    uint idx = 0;
-    float x;
+    auto dataset=Dataset();
+    dataset.loadDataset(datafile);
+    return dataset.getDataset();
+    
+    // DataPointsType dataPoints;
+    // ifstream in(datafile);
+    // string str;
+    // uint idx = 0;
+    // float x;
 
-    if (in.is_open()) {
-        while (getline(in, str, ',')) {
-            stringstream ss(str);
-            while (ss >> x) {
-                dataPoints[idx].push_back(x);
-                idx = 1 - idx;
-            }
-        }
-        in.close();
-    }
+    // if (in.is_open()) {
+    //     while (getline(in, str, ',')) {
+    //         stringstream ss(str);
+    //         while (ss >> x) {
+    //             dataPoints[idx].push_back(x);
+    //             idx = 1 - idx;
+    //         }
+    //         // ;
+    //         // cout << "str = " << str << " x = " << x << endl;
+    //     }
+    //     in.close();
+    // }
 
-    return dataPoints;
+    // return dataPoints;
 }
 
 void generateGridDimensions(
@@ -159,7 +166,7 @@ void generatePartitionDatasets(
     vector<DataPointsType> &partDataPointsArray,
     vector<PointChunkLookup> &pointChunkMapping,
     vector<uint> &pointIDs_shadow,
-    DataPointsType dataPoints_shadow) {
+    DataPointsType &dataPoints_shadow) {
     std::vector<unsigned int> shadowBins;
 
     const unsigned int CHUNKS = binBounaries.size() - 1;
