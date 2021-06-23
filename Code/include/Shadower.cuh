@@ -1,24 +1,24 @@
 #pragma once
 
-#include "global.hpp"
-#include "HybridDBSCAN.cuh"
 #include <unordered_map>
 
+#include "HybridDBSCAN.hpp"
+#include "global.hpp"
 
 class Shadower {
 public:
     Shadower(
-        const float epsilon, 
-        const uint minpts, 
-        DataPointsType dataPoints, 
-        uint dataSize, 
-        uint blockSize, 
-        vector<vector<int>> clusterIDsArray, 
-        vector<uint> pointIDs_shadow, 
+        const float epsilon,
+        const uint minpts,
+        DataPointsType dataPoints,
+        uint dataSize,
+        uint blockSize,
+        vector<vector<int>> clusterIDsArray,
+        vector<uint> pointIDs_shadow,
         vector<PointChunkLookup> pointChunkMapping);
     void run();
-    
-    unordered_map<int , int> merge;
+
+    unordered_map<int, int> merge;
     vector<int> clusterIDs;
     static const int UNVISITED = -1;
     static const int NOISE = -2;
@@ -46,9 +46,7 @@ private:
     uint *orderedIDKey, *orderedIDValue;
     vector<NeighborTable> neighborTables;
 
-
     vector<vector<int>> clusterIDsArray;
     vector<uint> pointIDs_shadow;
     vector<PointChunkLookup> pointChunkMapping;
-
 };

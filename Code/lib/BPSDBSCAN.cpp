@@ -3,7 +3,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "HybridDBSCAN.cuh"
+#include "HybridDBSCAN.hpp"
 #include "Shadower.cuh"
 
 using std::ceil;
