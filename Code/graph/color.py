@@ -9,8 +9,10 @@ df = pd.read_csv(dataFileName)
 # print(df)
 
 colors = ["b", "g", "r", "c", "m", "y", "k", "w"]
-dfc = (df["clusterID"]%len(colors)).map({i: colors[i] for i in range(0, len(colors))})
+dfc = (df["clusterID"] % len(colors)).map(
+    {i: colors[i] for i in range(0, len(colors))})
 # print(df["clusterID"])
+
 
 plt.scatter(df["x"], df["y"], c=dfc, alpha=0.6, s=10)
 

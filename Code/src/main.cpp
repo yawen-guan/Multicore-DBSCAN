@@ -49,9 +49,9 @@ int main(int argc, char *argv[]) {
 
     printf("\n----------- Original DBSCAN -----------\n");
 
-    // auto original_dbscan = OriginalDBSCAN(epsilon, minpts, dataPoints, dataSize);
-    // original_dbscan.run();
-    // original_dbscan.print("./data/output/DBSCAN-data-2500-out.csv");
+    auto original_dbscan = OriginalDBSCAN(epsilon, minpts, dataPoints, dataSize);
+    original_dbscan.run();
+    original_dbscan.print("./data/output/DBSCAN-data-2500-out.csv");
 
     /***** Hybrid DBSCAN *****/
     printf("\n----------- Hybrid DBSCAN -----------\n");

@@ -361,21 +361,21 @@ void DBSCAN::constructResultSetAndNeighborTable(
     cudaEventRecord(start, 0);
 
     float *d_dataPoints;
-    cudaMalloc((void **)&d_dataPoints, sizeof(float) * 2 * dataSize);
-    cudaMemcpy(d_dataPoints, dataPoints[0].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_dataPoints + dataSize, dataPoints[1].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice);
+    CHECK(cudaMalloc((void **)&d_dataPoints, sizeof(float) * 2 * dataSize));
+    CHECK(cudaMemcpy(d_dataPoints, dataPoints[0].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_dataPoints + dataSize, dataPoints[1].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice));
 
     uint *d_ordered2DataID, *d_ordered2GridID, *d_grid2CellID;
-    cudaMalloc((void **)&d_ordered2DataID, sizeof(uint) * dataSize);
-    cudaMalloc((void **)&d_ordered2GridID, sizeof(uint) * dataSize);
-    cudaMalloc((void **)&d_grid2CellID, sizeof(uint) * dataSize);
-    cudaMemcpy(d_ordered2DataID, ordered2DataID.data(), sizeof(uint) * dataSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_ordered2GridID, ordered2GridID.data(), sizeof(uint) * dataSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_grid2CellID, grid2CellID.data(), sizeof(uint) * gridSize, cudaMemcpyHostToDevice);
+    CHECK(cudaMalloc((void **)&d_ordered2DataID, sizeof(uint) * dataSize));
+    CHECK(cudaMalloc((void **)&d_ordered2GridID, sizeof(uint) * dataSize));
+    CHECK(cudaMalloc((void **)&d_grid2CellID, sizeof(uint) * dataSize));
+    CHECK(cudaMemcpy(d_ordered2DataID, ordered2DataID.data(), sizeof(uint) * dataSize, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_ordered2GridID, ordered2GridID.data(), sizeof(uint) * dataSize, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_grid2CellID, grid2CellID.data(), sizeof(uint) * gridSize, cudaMemcpyHostToDevice));
 
     Grid *d_index;
-    cudaMalloc((void **)&d_index, sizeof(Grid) * dataSize);
-    cudaMemcpy(d_index, index.data(), sizeof(Grid) * dataSize, cudaMemcpyHostToDevice);
+    CHECK(cudaMalloc((void **)&d_index, sizeof(Grid) * dataSize));
+    CHECK(cudaMemcpy(d_index, index.data(), sizeof(Grid) * dataSize, cudaMemcpyHostToDevice));
 
     uint *d_orderedIDKeys[GPU_STREAMS];
     uint *d_orderedIDValues[GPU_STREAMS];
@@ -391,15 +391,15 @@ void DBSCAN::constructResultSetAndNeighborTable(
 
     cudaStream_t stream[GPU_STREAMS];
     for (uint i = 0; i < GPU_STREAMS; i++) {
-        cudaStreamCreateWithFlags(&stream[i], cudaStreamNonBlocking);
+        CHECK(cudaStreamCreateWithFlags(&stream[i], cudaStreamNonBlocking));
     }
 
-// #pragma omp parallel for schedule(static, 1) num_threads(GPU_STREAMS)
-#pragma omp parallel for schedule(static, 1) num_threads(GPU_STREAMS)
+    // #pragma omp parallel for schedule(static, 1) num_threads(GPU_STREAMS)
+#pragma omp parallel for schedule(dynamic, 1) num_threads(GPU_STREAMS)
     for (uint i = 0; i < NCHUNKS; i++) {
         uint chunkID = i;
         int streamID = omp_get_thread_num();
-        // printf("chunkID = %u, streamID = %d\n", chunkID, streamID);
+        printf("chunkID = %u, streamID = %d\n", chunkID, streamID);
 
         neighborsCnts[streamID] = 0;
         CHECK(cudaMemcpyAsync(&d_cnt[streamID], &neighborsCnts[streamID], sizeof(uint), cudaMemcpyHostToDevice, stream[streamID]));
@@ -421,21 +421,21 @@ void DBSCAN::constructResultSetAndNeighborTable(
             exit(-1);
         }
 
-        cudaMemcpyAsync(raw_pointer_cast(orderedIDKeys[streamID]), raw_pointer_cast(d_keyPtr), sizeof(uint) * neighborsCnts[streamID], cudaMemcpyDeviceToHost, stream[streamID]);
-        cudaMemcpyAsync(raw_pointer_cast(orderedIDValues[streamID]), raw_pointer_cast(d_valuePtr), sizeof(uint) * neighborsCnts[streamID], cudaMemcpyDeviceToHost, stream[streamID]);
+        CHECK(cudaMemcpyAsync(raw_pointer_cast(orderedIDKeys[streamID]), raw_pointer_cast(d_keyPtr), sizeof(uint) * neighborsCnts[streamID], cudaMemcpyDeviceToHost, stream[streamID]));
+        CHECK(cudaMemcpyAsync(raw_pointer_cast(orderedIDValues[streamID]), raw_pointer_cast(d_valuePtr), sizeof(uint) * neighborsCnts[streamID], cudaMemcpyDeviceToHost, stream[streamID]));
 
-        cudaStreamSynchronize(stream[streamID]);
+        CHECK(cudaStreamSynchronize(stream[streamID]));
 
         valuePtrs[chunkID] = new uint[neighborsCnts[streamID]];
         constructNeighborTable(orderedIDKeys[streamID], orderedIDValues[streamID], neighborsCnts[streamID], valuePtrs[chunkID], neighborTables);
     }
 
-    cudaFree(d_dataPoints);
-    cudaFree(d_ordered2DataID);
-    cudaFree(d_ordered2GridID);
-    cudaFree(d_grid2CellID);
-    cudaFree(d_index);
-    cudaFree(d_cnt);
+    CHECK(cudaFree(d_dataPoints));
+    CHECK(cudaFree(d_ordered2DataID));
+    CHECK(cudaFree(d_ordered2GridID));
+    CHECK(cudaFree(d_grid2CellID));
+    CHECK(cudaFree(d_index));
+    CHECK(cudaFree(d_cnt));
     for (uint i = 0; i < GPU_STREAMS; i++) {
         cudaFree(d_orderedIDKeys[i]);
         cudaFree(d_orderedIDValues[i]);

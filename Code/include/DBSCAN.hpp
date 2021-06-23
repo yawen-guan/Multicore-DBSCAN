@@ -92,8 +92,7 @@ protected:
         vector<uint *> &valuePtrs,
         vector<NeighborTable> &neighborTables);
 
-    const float epsilon,
-        epsilonPow;
+    const float epsilon, epsilonPow;
     const uint minpts;
     DataPointsType dataPoints;
     uint dataSize;

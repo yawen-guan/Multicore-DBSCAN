@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
 #include "Dataset.hpp"
 
 using std::cout;
@@ -30,10 +31,10 @@ void check(const uint dataSize, const vector<int> &clusterIDs0, const vector<int
 }
 
 DataPointsType importDataset(const string datafile) {
-    auto dataset=Dataset();
+    auto dataset = Dataset();
     dataset.loadDataset(datafile);
     return dataset.getDataset();
-    
+
     // DataPointsType dataPoints;
     // ifstream in(datafile);
     // string str;

@@ -47,7 +47,7 @@ void OriginalDBSCAN::run() {
     }
     float end = omp_get_wtime();
     float elapsed_time_ms = (end - start) * 1000;
-    printf("Time elapsed on original OriginalDBSCAN: %f ms\n", elapsed_time_ms);
+    printf("Time elapsed on original OriginalDBSCAN: %f ms, startTime = %f, endTime = %f\n", elapsed_time_ms, start, end);
 }
 
 float OriginalDBSCAN::dist(const uint& id0, const uint& id1) {
