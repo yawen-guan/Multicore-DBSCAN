@@ -19,7 +19,7 @@ HybridDBSCAN::HybridDBSCAN(
                     blockSize(blockSize),
                     NCHUNKS(NCHUNKS),
                     gridSize(0) {
-    //neighborsCnt(0) {
+    printf("start HybridDBSCAN::HybridDBSCAN\n");
     if ((dataSize % NCHUNKS) != 0) {
         fprintf(stderr, "Error: dataSize mod NCHUNKS != 0\n");
     }
@@ -39,7 +39,7 @@ HybridDBSCAN::HybridDBSCAN(
     for (int i = 0; i < GPU_STREAMS; i++) {
         neighborsCnts[i] = 0;
     }
-    printf("HybridDBSCAN::HybridDBSCAN finish.\n");
+    printf("finish HybridDBSCAN::HybridDBSCAN\n");
 }
 
 HybridDBSCAN::~HybridDBSCAN() {
@@ -54,6 +54,7 @@ HybridDBSCAN::~HybridDBSCAN() {
 }
 
 void HybridDBSCAN::run() {
+    printf("start HybridDBSCAN::run\n");
     float start = omp_get_wtime();
     calcCells(minVals, maxVals, nCells, totalCells);
     constructIndex(
@@ -68,8 +69,23 @@ void HybridDBSCAN::run() {
         data2OrderedID,
         grid2CellID);
 
-    float gpu_elapsed_time_ms[NCHUNKS];
+    constructResultSetAndNeighborTable(
+        NCHUNKS,
+        nCells,
+        gridSize,
+        ordered2GridID,
+        ordered2DataID,
+        grid2CellID,
+        index,
+        blockSize,
+        neighborsCnts,
+        orderedIDKeys,
+        orderedIDValues,
+        valuePtrs,
+        neighborTables);
 
+    /*
+    float gpu_elapsed_time_ms[NCHUNKS];
 #pragma omp parallel for schedule(static, 1) num_threads(GPU_STREAMS)
     for (uint i = 0; i < NCHUNKS; i++) {
         printf("in run: i = %d\n", i);
@@ -98,8 +114,7 @@ void HybridDBSCAN::run() {
             valuePtrs[i],
             neighborTables);
     }
-
-    printf("parallel finished\n");
+    */
 
     DBSCANwithNeighborTable(
         data2OrderedID,
@@ -109,6 +124,8 @@ void HybridDBSCAN::run() {
     float end = omp_get_wtime();
     float elapsed_time_ms = (end - start) * 1000;
     printf("Time elapsed on Hybrid-DBSCAN: %f ms\n", elapsed_time_ms);
+
+    printf("finish HybridDBSCAN::run\n");
 }
 
 void HybridDBSCAN::print(const string &outFile) {

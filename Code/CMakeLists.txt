@@ -14,3 +14,5 @@ add_subdirectory("${PROJECT_SOURCE_DIR}/lib")
 add_executable(multicoreDBSCAN "${PROJECT_SOURCE_DIR}/src/main.cpp")
 
 target_link_libraries(multicoreDBSCAN libcudaDBSCAN)
+
+add_executable(test "${PROJECT_SOURCE_DIR}/src/test.cpp")

@@ -79,6 +79,8 @@ void DBSCAN::constructIndex(
     vector<uint> &ordered2DataID,
     vector<uint> &data2OrderedID,
     vector<uint> &grid2CellID) {
+    printf("start DBSCAN::constructIndex\n");
+
     // calculate cellIDs of grid cells
     auto cellIDs_dup = vector<uint64>();
     for (uint i = 0; i < dataSize; i++) {
@@ -87,9 +89,9 @@ void DBSCAN::constructIndex(
         uint64 cellID = l0 * nCells[1] + l1;
         cellIDs_dup.push_back(cellID);
     }
-    // omp_set_num_threads(NUM_THREADS);
-    // __gnu_parallel::sort(cellIDs_dup.begin(), cellIDs_dup.end());
-    std::sort(cellIDs_dup.begin(), cellIDs_dup.end());
+    omp_set_num_threads(NUM_THREADS);
+    __gnu_parallel::sort(cellIDs_dup.begin(), cellIDs_dup.end());
+    // std::sort(cellIDs_dup.begin(), cellIDs_dup.end());
     auto cellIDs_uqe = vector<uint64>();
     cellIDs_uqe.push_back(cellIDs_dup[0]);
     for (uint i = 1; i < cellIDs_dup.size(); i++) {
@@ -135,6 +137,8 @@ void DBSCAN::constructIndex(
         }
         index[i].orderedID_max = orderedID - 1;
     }
+
+    printf("finish DBSCAN::constructIndex\n");
 }
 
 __device__ int findGridByCellID(const uint cellID, const uint gridSize, const uint *d_grid2CellID) {
@@ -168,6 +172,7 @@ __device__ bool gpuInEpsilon(
 __global__ void gpuCalcGlobal(
     const uint chunkID,
     const uint NCHUNKS,
+    const uint chunkSize,
     const uint dataSize,
     const uint nCells1,
     const uint gridSize,
@@ -181,7 +186,8 @@ __global__ void gpuCalcGlobal(
     uint *d_orderedIDKey,
     uint *d_orderedIDValue) {
     uint globalID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (globalID >= (dataSize / NCHUNKS)) return;
+    // if (globalID >= (dataSize / NCHUNKS)) return;
+    if (globalID >= chunkSize) return;
 
     uint orderedID = globalID * NCHUNKS + chunkID;
     // uint dataID = d_ordered2DataID[orderedID];
@@ -237,9 +243,9 @@ float DBSCAN::constructGPUResultSet(
     cudaEventRecord(start, 0);
 
     float *d_dataPoints;
-    cudaMalloc((void **)&d_dataPoints, sizeof(float) * 2 * dataSize);
-    cudaMemcpy(d_dataPoints, dataPoints[0].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_dataPoints + dataSize, dataPoints[1].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice);
+    CHECK(cudaMalloc((void **)&d_dataPoints, sizeof(float) * 2 * dataSize));
+    CHECK(cudaMemcpy(d_dataPoints, dataPoints[0].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_dataPoints + dataSize, dataPoints[1].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice));
 
     uint *d_ordered2DataID, *d_ordered2GridID, *d_grid2CellID;
     cudaMalloc((void **)&d_ordered2DataID, sizeof(uint) * dataSize);
@@ -259,13 +265,13 @@ float DBSCAN::constructGPUResultSet(
     CHECK(cudaMalloc((void **)&d_orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE));
 
     uint *d_cnt;
-    // CHECK(cudaMalloc((void **)&d_cnt, sizeof(uint) * GPU_STREAMS));
     CHECK(cudaMalloc((void **)&d_cnt, sizeof(uint)));
+    uint chunkSize = dataSize / NCHUNKS;
 
     dim3 dimGrid(ceil((double)dataSize / (double)NCHUNKS / (double)blockSize));
     dim3 dimBlock(blockSize);
 
-    gpuCalcGlobal<<<dimGrid, dimBlock>>>(chunkID, NCHUNKS, dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_cnt, d_orderedIDKey, d_orderedIDValue);
+    gpuCalcGlobal<<<dimGrid, dimBlock>>>(chunkID, NCHUNKS, chunkSize, dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_cnt, d_orderedIDKey, d_orderedIDValue);
     cudaDeviceSynchronize();
 
     neighborsCnt = 0;
@@ -329,6 +335,121 @@ void DBSCAN::constructNeighborTable(
             neighborTables[key].valueIdx_max = keyData_uqe[i + 1].pos - 1;
         }
     }
+}
+
+void DBSCAN::constructResultSetAndNeighborTable(
+    const uint &NCHUNKS,
+    const array<uint, 2> &nCells,
+    const uint &gridSize,
+    const vector<uint> &ordered2GridID,
+    const vector<uint> &ordered2DataID,
+    const vector<uint> &grid2CellID,
+    const vector<Grid> &index,
+    const uint &blockSize,
+    uint neighborsCnts[GPU_STREAMS],
+    uint *orderedIDKeys[GPU_STREAMS],
+    uint *orderedIDValues[GPU_STREAMS],
+    vector<uint *> &valuePtrs,
+    vector<NeighborTable> &neighborTables) {
+    printf("start DBSCAN::constructResultSetAndNeighborTable\n");
+
+    float gpu_elapsed_time_ms;
+    cudaEvent_t start, end;
+    cudaEventCreate(&start);
+    cudaEventCreate(&end);
+    cudaEventRecord(start, 0);
+
+    float *d_dataPoints;
+    cudaMalloc((void **)&d_dataPoints, sizeof(float) * 2 * dataSize);
+    cudaMemcpy(d_dataPoints, dataPoints[0].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_dataPoints + dataSize, dataPoints[1].data(), sizeof(float) * dataSize, cudaMemcpyHostToDevice);
+
+    uint *d_ordered2DataID, *d_ordered2GridID, *d_grid2CellID;
+    cudaMalloc((void **)&d_ordered2DataID, sizeof(uint) * dataSize);
+    cudaMalloc((void **)&d_ordered2GridID, sizeof(uint) * dataSize);
+    cudaMalloc((void **)&d_grid2CellID, sizeof(uint) * dataSize);
+    cudaMemcpy(d_ordered2DataID, ordered2DataID.data(), sizeof(uint) * dataSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_ordered2GridID, ordered2GridID.data(), sizeof(uint) * dataSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_grid2CellID, grid2CellID.data(), sizeof(uint) * gridSize, cudaMemcpyHostToDevice);
+
+    Grid *d_index;
+    cudaMalloc((void **)&d_index, sizeof(Grid) * dataSize);
+    cudaMemcpy(d_index, index.data(), sizeof(Grid) * dataSize, cudaMemcpyHostToDevice);
+
+    uint *d_orderedIDKeys[GPU_STREAMS];
+    uint *d_orderedIDValues[GPU_STREAMS];
+    for (uint i = 0; i < GPU_STREAMS; i++) {
+        CHECK(cudaMalloc((void **)&d_orderedIDKeys[i], sizeof(uint) * GPU_BUFFER_SIZE));
+        CHECK(cudaMalloc((void **)&d_orderedIDValues[i], sizeof(uint) * GPU_BUFFER_SIZE));
+    }
+
+    uint *d_cnt;
+    CHECK(cudaMalloc((void **)&d_cnt, sizeof(uint) * GPU_STREAMS));
+
+    uint chunkSize = dataSize / NCHUNKS;
+
+    cudaStream_t stream[GPU_STREAMS];
+    for (uint i = 0; i < GPU_STREAMS; i++) {
+        cudaStreamCreateWithFlags(&stream[i], cudaStreamNonBlocking);
+    }
+
+// #pragma omp parallel for schedule(static, 1) num_threads(GPU_STREAMS)
+#pragma omp parallel for schedule(static, 1) num_threads(GPU_STREAMS)
+    for (uint i = 0; i < NCHUNKS; i++) {
+        uint chunkID = i;
+        int streamID = omp_get_thread_num();
+        printf("chunkID = %u, streamID = %d\n", chunkID, streamID);
+
+        neighborsCnts[streamID] = 0;
+        CHECK(cudaMemcpyAsync(&d_cnt[streamID], &neighborsCnts[streamID], sizeof(uint), cudaMemcpyHostToDevice, stream[streamID]));
+
+        dim3 dimGrid(ceil((double)chunkSize / (double)blockSize));
+        dim3 dimBlock(blockSize);
+        gpuCalcGlobal<<<dimGrid, dimBlock, 0, stream[streamID]>>>(chunkID, NCHUNKS, chunkSize, dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, &d_cnt[chunkID], d_orderedIDKeys[streamID], d_orderedIDValues[streamID]);
+
+        CHECK(cudaMemcpyAsync(&neighborsCnts[streamID], &d_cnt[streamID], sizeof(uint), cudaMemcpyDeviceToHost, stream[streamID]));
+
+        // sort gpuResultSet
+        device_ptr<uint> d_keyPtr(d_orderedIDKeys[streamID]);
+        device_ptr<uint> d_valuePtr(d_orderedIDValues[streamID]);
+
+        try {
+            sort_by_key(thrust::cuda::par.on(stream[streamID]), d_keyPtr, d_keyPtr + neighborsCnts[streamID], d_valuePtr);
+        } catch (std::bad_alloc &e) {
+            fprintf(stderr, "Error: Ran out of memory while sorting.\n");
+            exit(-1);
+        }
+
+        cudaMemcpyAsync(raw_pointer_cast(orderedIDKeys[streamID]), raw_pointer_cast(d_keyPtr), sizeof(uint) * neighborsCnts[streamID], cudaMemcpyDeviceToHost, stream[streamID]);
+        cudaMemcpyAsync(raw_pointer_cast(orderedIDValues[streamID]), raw_pointer_cast(d_valuePtr), sizeof(uint) * neighborsCnts[streamID], cudaMemcpyDeviceToHost, stream[streamID]);
+
+        cudaStreamSynchronize(stream[streamID]);
+
+        valuePtrs[chunkID] = new uint[neighborsCnts[streamID]];
+        constructNeighborTable(orderedIDKeys[streamID], orderedIDValues[streamID], neighborsCnts[streamID], valuePtrs[chunkID], neighborTables);
+    }
+
+    cudaFree(d_dataPoints);
+    cudaFree(d_ordered2DataID);
+    cudaFree(d_ordered2GridID);
+    cudaFree(d_grid2CellID);
+    cudaFree(d_index);
+    cudaFree(d_cnt);
+    for (uint i = 0; i < GPU_STREAMS; i++) {
+        cudaFree(d_orderedIDKeys[i]);
+        cudaFree(d_orderedIDValues[i]);
+    }
+
+    cudaEventRecord(end, 0);
+    cudaEventSynchronize(end);
+    cudaEventElapsedTime(&gpu_elapsed_time_ms, start, end);
+
+    for (int i = 0; i < GPU_STREAMS; i++) {
+        CHECK(cudaStreamDestroy(stream[i]));
+    }
+
+    printf("finish DBSCAN::constructResultSetAndNeighborTable\n");
+    // return gpu_elapsed_time_ms;
 }
 
 void DBSCAN::DBSCANwithNeighborTable(

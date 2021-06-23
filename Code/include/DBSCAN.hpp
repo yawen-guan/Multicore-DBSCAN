@@ -75,7 +75,23 @@ protected:
         const vector<NeighborTable> &neighborTables,
         vector<int> &clusterIDs);
 
-    const float epsilon, epsilonPow;
+    void constructResultSetAndNeighborTable(
+        const uint &NCHUNKS,
+        const array<uint, 2> &nCells,
+        const uint &gridSize,
+        const vector<uint> &ordered2GridID,
+        const vector<uint> &ordered2DataID,
+        const vector<uint> &grid2CellID,
+        const vector<Grid> &index,
+        const uint &blockSize,
+        uint neighborsCnts[GPU_STREAMS],
+        uint *orderedIDKeys[GPU_STREAMS],
+        uint *orderedIDValue[GPU_STREAMS],
+        vector<uint *> &valuePtrs,
+        vector<NeighborTable> &neighborTables);
+
+    const float epsilon,
+        epsilonPow;
     const uint minpts;
     DataPointsType dataPoints;
     uint dataSize;
