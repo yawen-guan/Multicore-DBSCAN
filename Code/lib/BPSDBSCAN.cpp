@@ -169,11 +169,13 @@ void BPSDBSCAN::print(const string &outFile) {
 }
 
 void BPSDBSCAN::run() {
-    float start = omp_get_wtime();
+    auto start = system_clock::now();
     partition();
     modifiedDBSCAN();
     merge();
-    float end = omp_get_wtime();
-    float elapsed_time_ms = (end - start) * 1000;
-    printf("Time elapsed on BPS-DBSCAN: %f ms\n", elapsed_time_ms);
+    auto end = system_clock::now();
+    auto duration = duration_cast<microseconds>(end - start);
+    cout << "Time elapsed on Hybrid-DBSCAN: "
+         << double(duration.count()) * microseconds::period::num / milliseconds::period::den
+         << "ms" << endl;
 }

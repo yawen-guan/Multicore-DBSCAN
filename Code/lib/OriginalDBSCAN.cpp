@@ -20,7 +20,7 @@ OriginalDBSCAN::OriginalDBSCAN(
 }
 
 void OriginalDBSCAN::run() {
-    float start = omp_get_wtime();
+    auto start = system_clock::now();
 
     int clusterID = 0;
     for (uint i = 0; i < dataSize; i++) {
@@ -45,9 +45,11 @@ void OriginalDBSCAN::run() {
             }
         }
     }
-    float end = omp_get_wtime();
-    float elapsed_time_ms = (end - start) * 1000;
-    printf("Time elapsed on original OriginalDBSCAN: %f ms, startTime = %f, endTime = %f\n", elapsed_time_ms, start, end);
+    auto end = system_clock::now();
+    auto duration = duration_cast<microseconds>(end - start);
+    cout << "Time elapsed on Hybrid-DBSCAN: "
+         << double(duration.count()) * microseconds::period::num / milliseconds::period::den
+         << "ms" << endl;
 }
 
 float OriginalDBSCAN::dist(const uint& id0, const uint& id1) {

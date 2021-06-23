@@ -55,7 +55,8 @@ HybridDBSCAN::~HybridDBSCAN() {
 
 void HybridDBSCAN::run() {
     printf("start HybridDBSCAN::run\n");
-    float start = omp_get_wtime();
+
+    auto start = system_clock::now();
     calcCells(minVals, maxVals, nCells, totalCells);
     constructIndex(
         minVals,
@@ -121,9 +122,12 @@ void HybridDBSCAN::run() {
         ordered2DataID,
         neighborTables,
         clusterIDs);
-    float end = omp_get_wtime();
-    float elapsed_time_ms = (end - start) * 1000;
-    printf("Time elapsed on Hybrid-DBSCAN: %f ms, startTime = %f, endTime = %f\n", elapsed_time_ms, start, end);
+
+    auto end = system_clock::now();
+    auto duration = duration_cast<microseconds>(end - start);
+    cout << "Time elapsed on Hybrid-DBSCAN: "
+         << double(duration.count()) * microseconds::period::num / milliseconds::period::den
+         << "ms" << endl;
 
     printf("finish HybridDBSCAN::run\n");
 }

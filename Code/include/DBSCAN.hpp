@@ -1,6 +1,9 @@
 #pragma once
 
+#include <chrono>
+
 #include "global.hpp"
+using namespace std::chrono;
 
 struct Grid {
     uint orderedID_min;
