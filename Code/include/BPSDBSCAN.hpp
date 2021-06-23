@@ -26,12 +26,10 @@ private:
     uint64 totalCells;
 
     vector<vector<int>> clusterIDsArray;
-    
+
     vector<uint> binBounaries;
     vector<PointChunkLookup> pointChunkMapping;
     vector<uint> pointIDs_shadow;
     array<vector<float>, 2> dataPoints_shadow;
     vector<DataPointsType> partDataPointsArray;
-
-
 };

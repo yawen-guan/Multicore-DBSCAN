@@ -69,18 +69,16 @@ void DBSCAN::calcCells(
 }
 
 void DBSCAN::constructIndex(
-    array<float, 2> &minVals,
-    array<float, 2> &maxVals,
-    array<uint, 2> &nCells,
-    uint64 &totalCells,
+    const array<float, 2> &minVals,
+    const array<float, 2> &maxVals,
+    const array<uint, 2> &nCells,
+    const uint64 &totalCells,
     uint &gridSize,
     vector<Grid> &index,
     vector<uint> &ordered2GridID,
     vector<uint> &ordered2DataID,
     vector<uint> &data2OrderedID,
     vector<uint> &grid2CellID) {
-    calcCells(minVals, maxVals, nCells, totalCells);
-
     // calculate cellIDs of grid cells
     auto cellIDs_dup = vector<uint64>();
     for (uint i = 0; i < dataSize; i++) {
@@ -167,6 +165,8 @@ __device__ bool gpuInEpsilon(
 }
 
 __global__ void gpuCalcGlobal(
+    const uint chunkID,
+    const uint NCHUNKS,
     const uint dataSize,
     const uint nCells1,
     const uint gridSize,
@@ -179,9 +179,12 @@ __global__ void gpuCalcGlobal(
     uint *d_cnt,
     uint *d_orderedIDKey,
     uint *d_orderedIDValue) {
-    uint orderedID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (orderedID >= dataSize) return;
+    uint globalID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (globalID >= (dataSize / NCHUNKS)) return;
+
+    uint orderedID = globalID * NCHUNKS + chunkID;
     // uint dataID = d_ordered2DataID[orderedID];
+    // printf("dataID = %u, orderedID = %u, globalID = %u, chunkID = %u\n", dataID, orderedID, globalID, chunkID);
 
     uint gridID = d_ordered2GridID[orderedID];
     uint cellID = d_grid2CellID[gridID];
@@ -214,6 +217,8 @@ __global__ void gpuCalcGlobal(
 }
 
 float DBSCAN::constructGPUResultSet(
+    const uint &chunkID,
+    const uint &NCHUNKS,
     const array<uint, 2> &nCells,
     const uint &gridSize,
     const vector<uint> &ordered2GridID,
@@ -247,20 +252,19 @@ float DBSCAN::constructGPUResultSet(
     cudaMalloc((void **)&d_index, sizeof(Grid) * dataSize);
     cudaMemcpy(d_index, index.data(), sizeof(Grid) * dataSize, cudaMemcpyHostToDevice);
 
-    uint *d_orderedIDKey;    //key
-    uint *d_orderedIDValue;  //value
+    uint *d_orderedIDKey;
+    uint *d_orderedIDValue;
     CHECK(cudaMalloc((void **)&d_orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE));
     CHECK(cudaMalloc((void **)&d_orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE));
-    CHECK(cudaMallocHost((void **)&orderedIDKey, sizeof(uint) * GPU_BUFFER_SIZE));
-    CHECK(cudaMallocHost((void **)&orderedIDValue, sizeof(uint) * GPU_BUFFER_SIZE));
 
     uint *d_cnt;
-    cudaMalloc((void **)&d_cnt, sizeof(uint));
+    // CHECK(cudaMalloc((void **)&d_cnt, sizeof(uint) * GPU_STREAMS));
+    CHECK(cudaMalloc((void **)&d_cnt, sizeof(uint)));
 
-    dim3 dimGrid(ceil((double)dataSize / (double)blockSize));
+    dim3 dimGrid(ceil((double)dataSize / (double)NCHUNKS / (double)blockSize));
     dim3 dimBlock(blockSize);
 
-    gpuCalcGlobal<<<dimGrid, dimBlock>>>(dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_cnt, d_orderedIDKey, d_orderedIDValue);
+    gpuCalcGlobal<<<dimGrid, dimBlock>>>(chunkID, NCHUNKS, dataSize, nCells[1], gridSize, epsilonPow, d_dataPoints, d_ordered2DataID, d_ordered2GridID, d_grid2CellID, d_index, d_cnt, d_orderedIDKey, d_orderedIDValue);
     cudaDeviceSynchronize();
 
     neighborsCnt = 0;
@@ -300,7 +304,10 @@ void DBSCAN::constructNeighborTable(
     const uint *orderedIDKey,
     const uint *orderedIDValue,
     const uint &neighborsCnt,
+    uint *&valuePtr,
     vector<NeighborTable> &neighborTables) {
+    copy(orderedIDValue, orderedIDValue + neighborsCnt, valuePtr);
+
     auto keyData_uqe = vector<KeyData>();
     keyData_uqe.push_back(KeyData(orderedIDKey[0], 0));
     for (uint i = 1; i < neighborsCnt; i++) {
@@ -309,10 +316,11 @@ void DBSCAN::constructNeighborTable(
         }
     }
 
-    neighborTables.resize(dataSize);
+    // neighborTables.resize(dataSize);
     uint key = 0;
     for (uint i = 0; i < keyData_uqe.size(); i++) {
         key = keyData_uqe[i].key;
+        neighborTables[key].values = valuePtr;
         neighborTables[key].valueIdx_min = keyData_uqe[i].pos;
         if (i == keyData_uqe.size() - 1) {
             neighborTables[key].valueIdx_max = neighborsCnt - 1;
@@ -325,11 +333,10 @@ void DBSCAN::constructNeighborTable(
 void DBSCAN::DBSCANwithNeighborTable(
     const vector<uint> &data2OrderedID,
     const vector<uint> &ordered2DataID,
-    const uint *orderedIDValue,
     const vector<NeighborTable> &neighborTables,
     vector<int> &clusterIDs) {
     auto neighbors = vector<uint>();
-    int clusterID = 0, orderedID = -1;
+    int clusterID = 0, orderedID = -1, size = 0, newSize = 0;
 
     for (uint i = 0; i < dataSize; i++) {
         orderedID = data2OrderedID[i];
@@ -339,16 +346,19 @@ void DBSCAN::DBSCANwithNeighborTable(
         }
         neighbors.clear();
 
-        uint size = neighborTables[orderedID].valueIdx_max - neighborTables[orderedID].valueIdx_min + 1;
+        if (neighborTables[orderedID].valueIdx_min == -1 || neighborTables[orderedID].valueIdx_max == -1) {
+            size = 0;
+        } else {
+            size = neighborTables[orderedID].valueIdx_max - neighborTables[orderedID].valueIdx_min + 1;
+        }
 
         if ((size + 1) < minpts) {
-            // if (size < minpts) {
             clusterIDs[i] = DBSCAN::NOISE;
         } else {
             clusterIDs[i] = ++clusterID;
             neighbors.resize(size);
             for (uint j = neighborTables[orderedID].valueIdx_min; j <= neighborTables[orderedID].valueIdx_max; j++) {
-                neighbors[j - neighborTables[orderedID].valueIdx_min] = orderedIDValue[j];
+                neighbors[j - neighborTables[orderedID].valueIdx_min] = neighborTables[orderedID].values[j];  // orderedIDValue[j];
             }
 
             while (neighbors.size() != 0) {
@@ -356,12 +366,16 @@ void DBSCAN::DBSCANwithNeighborTable(
                 uint p = ordered2DataID[pOrderedID];
 
                 if (clusterIDs[p] == DBSCAN::UNVISITED) {
-                    uint newSize = neighborTables[pOrderedID].valueIdx_max - neighborTables[pOrderedID].valueIdx_min + 1;
+                    if (neighborTables[pOrderedID].valueIdx_min == -1 || neighborTables[pOrderedID].valueIdx_max == -1) {
+                        newSize = 0;
+                    } else {
+                        newSize = neighborTables[pOrderedID].valueIdx_max - neighborTables[pOrderedID].valueIdx_min + 1;
+                    }
+
                     if ((newSize + 1) >= minpts) {
-                        // if (newSize >= minpts) {
                         neighbors.resize(size + newSize);
                         for (uint j = neighborTables[pOrderedID].valueIdx_min; j <= neighborTables[pOrderedID].valueIdx_max; j++) {
-                            neighbors[size + j - neighborTables[pOrderedID].valueIdx_min] = orderedIDValue[j];
+                            neighbors[size + j - neighborTables[pOrderedID].valueIdx_min] = neighborTables[pOrderedID].values[j];  // orderedIDValue[j];
                         }
                     }
                 }

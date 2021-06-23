@@ -4,7 +4,8 @@
 
 class HybridDBSCAN : public DBSCAN {
 public:
-    HybridDBSCAN(const float epsilon, const uint minpts, DataPointsType dataPoints, uint dataSize, uint blockSize);
+    HybridDBSCAN(const float epsilon, const uint minpts, DataPointsType dataPoints, uint dataSize, uint blockSize, uint NCHUNKS);
+    ~HybridDBSCAN();
     void run();
     void print(const string &outFile);
     vector<uint> debug_getNeighbors(const uint &id);
@@ -13,8 +14,8 @@ public:
     vector<int> clusterIDs;
 
 private:
-    uint gridSize, neighborsCnt;
-    const uint blockSize;
+    uint gridSize, neighborsCnts[GPU_STREAMS];  // neighborsCnt
+    const uint blockSize, NCHUNKS;
 
     array<float, 2> minVals, maxVals;
     array<uint, 2> nCells;
@@ -33,7 +34,9 @@ private:
     // unordered_map<uint, uint> cell2GridID;
 
     // gpuResultSet key, value
-    uint *orderedIDKey, *orderedIDValue;
+    // uint *orderedIDKey, *orderedIDValue;
+    uint *orderedIDKeys[GPU_STREAMS], *orderedIDValues[GPU_STREAMS];
+    vector<uint *> valuePtrs;
 
     // neighborTables[orderedID] = ...
     vector<NeighborTable> neighborTables;

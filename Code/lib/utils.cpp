@@ -6,12 +6,12 @@
 #include <iostream>
 #include <sstream>
 
-using std::max;
-using std::min;
 using std::cout;
 using std::endl;
 using std::getline;
 using std::ifstream;
+using std::max;
+using std::min;
 using std::stringstream;
 
 void check(const uint dataSize, const vector<int> &clusterIDs0, const vector<int> &clusterIDs1) {
@@ -42,8 +42,6 @@ DataPointsType importDataset(const string datafile) {
                 dataPoints[idx].push_back(x);
                 idx = 1 - idx;
             }
-            // ;
-            // cout << "str = " << str << " x = " << x << endl;
         }
         in.close();
     }

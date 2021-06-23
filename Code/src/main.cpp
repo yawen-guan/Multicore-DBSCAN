@@ -10,7 +10,7 @@
 #include <iostream>
 
 #include "BPSDBSCAN.hpp"
-#include "HybridDBSCAN.cuh"
+#include "HybridDBSCAN.hpp"
 #include "OriginalDBSCAN.hpp"
 #include "global.hpp"
 #include "utils.hpp"
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
     /***** Hybrid DBSCAN *****/
     printf("\n----------- Hybrid DBSCAN -----------\n");
 
-    auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize);
+    auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
     hybrid_dbscan.run();
     hybrid_dbscan.print("../data/output/Hybrid-DBSCAN-data-2500-out.csv");
 

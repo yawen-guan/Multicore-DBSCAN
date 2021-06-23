@@ -8,8 +8,10 @@ struct Grid {
 };
 
 struct NeighborTable {
-    uint valueIdx_min;
-    uint valueIdx_max;
+    int valueIdx_min;
+    int valueIdx_max;
+    uint *values;
+    NeighborTable() : valueIdx_min(-1), valueIdx_max(-1), values(nullptr) {}
 };
 
 struct KeyData {
@@ -35,10 +37,10 @@ protected:
         uint64 &totalCells);
 
     void constructIndex(
-        array<float, 2> &minVals,
-        array<float, 2> &maxVals,
-        array<uint, 2> &nCells,
-        uint64 &totalCells,
+        const array<float, 2> &minVals,
+        const array<float, 2> &maxVals,
+        const array<uint, 2> &nCells,
+        const uint64 &totalCells,
         uint &gridSize,
         vector<Grid> &index,
         vector<uint> &ordered2GridID,
@@ -47,6 +49,8 @@ protected:
         vector<uint> &grid2CellID);
 
     float constructGPUResultSet(
+        const uint &chunkID,
+        const uint &NCHUNKS,
         const array<uint, 2> &nCells,
         const uint &gridSize,
         const vector<uint> &ordered2GridID,
@@ -62,12 +66,12 @@ protected:
         const uint *orderedIDKey,
         const uint *orderedIDValue,
         const uint &neighborsCnt,
+        uint *&valuePtr,
         vector<NeighborTable> &neighborTables);
 
     void DBSCANwithNeighborTable(
         const vector<uint> &data2OrderedID,
         const vector<uint> &ordered2DataID,
-        const uint *orderedIDValue,
         const vector<NeighborTable> &neighborTables,
         vector<int> &clusterIDs);
 
