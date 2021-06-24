@@ -36,41 +36,101 @@ int main(int argc, char *argv[]) {
 
     printf("\n----------- handle input -----------\n");
     cout << "datafile = " << datafile << ", epsilon = " << epsilon << ", minpts = " << minpts << ", NCHUNK = " << NCHUNKS << ", blockSize = " << blockSize << endl;
+    
+    const string datafilelist[7] = {
+        "./data/input/data-10.txt",
+        "./data/input/data-2500.txt",
+        "./data/input/data-8000.txt",
+        "./data/input/data-10000.txt",
+        "./data/input/data-20000.txt",
+        "./data/input/data-100000.txt",
+        "./data/input/data-2400000.txt"
+    };
+    
+    const string outfilelist[7] = {
+        "./data/output/10-",
+        "./data/output/2500-",
+        "./data/output/8000-",
+        "./data/output/10000-",
+        "./data/output/20000-",
+        "./data/output/100000-",
+        "./data/output/2400000-"
+    };
+    
+    if(datafile=="all"){
+        for(int i = 0;i < 7; i ++){
+            array<vector<float>, 2> dataPoints = importDataset(datafilelist[i]);
+            uint dataSize = dataPoints[0].size();
 
-    /***** import dataset *****/
+            printf("\n----------- import dataset -----------\n");
+            printf("dataSize = %u\n", dataSize);
 
-    array<vector<float>, 2> dataPoints = importDataset(datafile);
-    uint dataSize = dataPoints[0].size();
+            /***** original DBSCAN *****/
 
-    printf("\n----------- import dataset -----------\n");
-    printf("dataSize = %u\n", dataSize);
+            printf("\n----------- Original DBSCAN -----------\n");
 
-    /***** original DBSCAN *****/
+            auto original_dbscan = OriginalDBSCAN(epsilon, minpts, dataPoints, dataSize);
+            original_dbscan.run();
+            original_dbscan.print(outfilelist[i]+"DBSCAN-out.csv");
 
-    printf("\n----------- Original DBSCAN -----------\n");
+            /***** Hybrid DBSCAN *****/
+            printf("\n----------- Hybrid DBSCAN -----------\n");
 
-    auto original_dbscan = OriginalDBSCAN(epsilon, minpts, dataPoints, dataSize);
-    original_dbscan.run();
-    original_dbscan.print("./data/output/DBSCAN-data-2500-out.csv");
+            auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
+            hybrid_dbscan.run();
+            hybrid_dbscan.print(outfilelist[i]+"Hybrid-out.csv");
 
-    /***** Hybrid DBSCAN *****/
-    printf("\n----------- Hybrid DBSCAN -----------\n");
+            // check(dataSize, original_dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
 
-    auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
-    hybrid_dbscan.run();
-    hybrid_dbscan.print("./data/output/Hybrid-DBSCAN-data-2500-out.csv");
+            /***** BPS-DBSCAN *****/
 
-    // check(dataSize, original_dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
+//             printf("\n----------- BPS DBSCAN -----------\n");
 
-    /***** BPS-DBSCAN *****/
+//             auto BPS_dbscan = BPSDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
+//             BPS_dbscan.run();
+//             BPS_dbscan.print(outfilelist[i]+"BPSDBSCAN-out.csv");
 
-    printf("\n----------- BPS DBSCAN -----------\n");
+            // check(dataSize, original_dbscan.clusterIDs, BPS_dbscan.finalClusterIDs);
+        }
+    }
+    else{
+        /***** import dataset *****/
 
-    auto BPS_dbscan = BPSDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
-    BPS_dbscan.run();
-    BPS_dbscan.print("./data/output/BPS-DBSCAN-data-2500-out.csv");
+        array<vector<float>, 2> dataPoints = importDataset(datafile);
+        uint dataSize = dataPoints[0].size();
 
-    // check(dataSize, original_dbscan.clusterIDs, BPS_dbscan.finalClusterIDs);
+        printf("\n----------- import dataset -----------\n");
+        printf("dataSize = %u\n", dataSize);
+
+        /***** original DBSCAN *****/
+
+        printf("\n----------- Original DBSCAN -----------\n");
+
+        auto original_dbscan = OriginalDBSCAN(epsilon, minpts, dataPoints, dataSize);
+        original_dbscan.run();
+        original_dbscan.print("./data/output/DBSCAN-data-2500-out.csv");
+
+        /***** Hybrid DBSCAN *****/
+        printf("\n----------- Hybrid DBSCAN -----------\n");
+
+        auto hybrid_dbscan = HybridDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
+        hybrid_dbscan.run();
+        hybrid_dbscan.print("./data/output/Hybrid-DBSCAN-data-2500-out.csv");
+
+        // check(dataSize, original_dbscan.clusterIDs, hybrid_dbscan.clusterIDs);
+
+        /***** BPS-DBSCAN *****/
+
+        printf("\n----------- BPS DBSCAN -----------\n");
+
+        auto BPS_dbscan = BPSDBSCAN(epsilon, minpts, dataPoints, dataSize, blockSize, NCHUNKS);
+        BPS_dbscan.run();
+        BPS_dbscan.print("./data/output/BPS-DBSCAN-data-2500-out.csv");
+
+        // check(dataSize, original_dbscan.clusterIDs, BPS_dbscan.finalClusterIDs);
+    }
+
+    
 
     return 0;
 }

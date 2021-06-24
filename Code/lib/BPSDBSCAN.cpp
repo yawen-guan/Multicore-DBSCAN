@@ -175,7 +175,7 @@ void BPSDBSCAN::run() {
     merge();
     auto end = system_clock::now();
     auto duration = duration_cast<microseconds>(end - start);
-    cout << "Time elapsed on Hybrid-DBSCAN: "
+    cout << "Time elapsed on BPS-DBSCAN: "
          << double(duration.count()) * microseconds::period::num / milliseconds::period::den
          << "ms" << endl;
 }
